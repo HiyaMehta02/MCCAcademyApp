@@ -25,11 +25,20 @@ export default function HomeScreen() {
   }, []);
 
   return (
-    <View style={{ padding: 20, backgroundColor: "lightblue" }}>
-      <Text style={{ fontSize: 24, marginBottom: 20 }}>
-        Welcome to the MCCC App
-      </Text>
-      <FlatList 
+<View style={{ padding: 20, backgroundColor: "#232323", flex: 1 }}>
+  <Text style={{ paddingTop: 30, paddingLeft: 40, fontSize: 70, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
+    <Text style={{ fontWeight: "bold" }}>M</Text>USCAT
+  </Text>
+  <Text style={{ paddingLeft: 40, fontSize: 70, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
+    <Text style={{ fontWeight: "bold" }}>C</Text>RICKET
+  </Text>
+  <Text style={{ paddingLeft: 40, fontSize: 70, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
+    <Text style={{ fontWeight: "bold" }}>C</Text>OACHING
+  </Text>
+  <Text style={{ paddingLeft: 40, fontSize: 70, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
+    <Text style={{ fontWeight: "bold" }}>C</Text>ENTER
+  </Text>
+      {/* <FlatList 
         data={branchs}
         keyExtractor={(item) => item.BranchID.toString()}
         renderItem={({ item }) => (
@@ -37,7 +46,7 @@ export default function HomeScreen() {
             {item.Name}
           </Text>
         )}
-      />
+      /> */}
     </View>
   );
 }
