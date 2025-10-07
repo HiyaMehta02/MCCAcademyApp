@@ -14,7 +14,8 @@ export default function GreenBox({ style }) {
   };
 
   return <View style={[styles.box, style]}> 
-    {phase === "login" && (
+  {/* the following is the login phase code */}
+    {phase === "login" && ( 
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", width: "100%" }}>
             <Text style={{ color: "white", fontSize: 37, marginBottom: 20 }}>Log In</Text>
             <Text style={{ color: "white", fontSize: 17, marginBottom: 20, width: "70%", textAlign: "center" }}>Please enter your coach ID to get access to the app!</Text>
@@ -76,13 +77,27 @@ export default function GreenBox({ style }) {
         </View>
     )}
             
+    {/* the following is the branch phase code */}
     {phase === "branch" && (
         <View style={{ marginTop: 30, alignItems: "center" }}>
           <Text style={{ color: "white", fontSize: 24 }}>Branch Selection</Text>
-          <Button title="Select Branch" onPress={handleBranchConfirm} />
+            <Pressable
+            onPress={handleBranchConfirm}
+            style={{
+                backgroundColor: "#116C1B",
+                width: "50%",
+                height: 50,
+                borderRadius: 8,
+                alignItems: "center",
+                justifyContent: "center",
+            }}
+            >
+            <Text style={{ color: "white", fontSize: 18 }}>Select Branch</Text>
+            </Pressable> 
         </View>
       )}
 
+    {/* the following is the menu phase code */}
       {phase === "menu" && (
         <View style={{ marginTop: 30, alignItems: "center" }}>
           <Text style={{ color: "white", fontSize: 24 }}>Welcome to the Home Screen!</Text>
