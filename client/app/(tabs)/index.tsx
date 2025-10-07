@@ -1,5 +1,6 @@
 import { Text, View, FlatList, Image } from "react-native";
 import { useState, useEffect } from "react";
+import GreenBox from '../../components/Login-Box';
 
 type Branch = {
   BranchID: number;
@@ -9,20 +10,20 @@ type Branch = {
 export default function HomeScreen() {
   const [branchs, setBranchs] = useState<Branch[]>([]);
 
-  useEffect(() => {
-    async function fetchBranchs() {
-      try {
-        const apiIp = process.env.API_IP;
-        const res = await fetch(`http://${apiIp}:3000/branchs`);
-        const data: Branch[] = await res.json();
-        console.log(data);
-        setBranchs(data);
-      } catch (err) {
-        console.error("Error fetching branchs:", err);
-      }
-    }
-    fetchBranchs();
-  }, []);
+  // useEffect(() => {
+  //   async function fetchBranchs() {
+  //     try {
+  //       const apiIp = process.env.API_IP;
+  //       const res = await fetch(`http://${apiIp}:3000/branchs`);
+  //       const data: Branch[] = await res.json();
+  //       console.log(data);
+  //       setBranchs(data);
+  //     } catch (err) {
+  //       console.error("Error fetching branchs:", err);
+  //     }
+  //   }
+  //   fetchBranchs();
+  // }, []);
 
   return (
 <View style={{ padding: 20, backgroundColor: "#232323", flex: 1 }}>
@@ -69,6 +70,7 @@ export default function HomeScreen() {
         paddingBottom: 30,
       }}
     />
+    <GreenBox style={{ position: "absolute", bottom: "15%", left: "2.3%" }} />
   </View>
       {/* <FlatList 
         data={branchs}
@@ -82,3 +84,4 @@ export default function HomeScreen() {
     </View>
   );
 }
+

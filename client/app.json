@@ -3,7 +3,7 @@
     "name": "client",
     "slug": "mccc-academy-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/images/appIcon.png",
     "scheme": "client",
     "userInterfaceStyle": "automatic",
