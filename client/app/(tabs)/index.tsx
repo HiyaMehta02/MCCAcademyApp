@@ -38,13 +38,13 @@ export default function HomeScreen() {
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 30,
-    marginTop: 45,
+    marginTop: 34,
   }}
 >
 </View>
     {/* Text column */}
     <View>
-      <Text style={{ paddingTop: 60, paddingLeft: 10, fontSize: 75, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
+      <Text style={{ paddingTop: 40, paddingLeft: 10, fontSize: 75, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
         <Text style={{ fontWeight: "bold" }}>M</Text>USCAT
       </Text>
       <Text style={{ paddingLeft: 10, fontSize: 75, lineHeight: 75, fontFamily: "Montserrat", color: "white" }}>
@@ -70,7 +70,7 @@ export default function HomeScreen() {
         paddingBottom: 30,
       }}
     />
-    <GreenBox style={{ position: "absolute", bottom: "15%", left: "2.3%" }} />
+    <GreenBox style={{ position: "absolute", bottom: "14%", left: "2.3%" }} />
   </View>
       {/* <FlatList 
         data={branchs}
