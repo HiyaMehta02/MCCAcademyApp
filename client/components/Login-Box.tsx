@@ -1,9 +1,16 @@
 // components/Login-Box.js
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import { View, StyleSheet, Text, TextInput, Image, Pressable } from 'react-native';
+import { BASE_URL } from "../app/config/api";
+
+interface Branch {
+  Name: string;
+}
 
 export default function GreenBox({ style }) {
   const [phase, setPhase] = useState("login"); 
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const handleLogin = () => {
     setPhase("branch");
@@ -13,7 +20,27 @@ export default function GreenBox({ style }) {
     setPhase("menu");
   };
 
-  return <View style={[styles.box, style]}> 
+  useEffect(() => {
+async function fetchBranches() {
+  try {
+    const response = await fetch(`${BASE_URL}/api/login`);
+
+    if (!response.ok) throw new Error("Failed to fetch branches");
+
+    const data = await response.json();
+    setBranches(data);
+
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setLoading(false);
+  }
+}
+    fetchBranches();
+  }, []);
+
+  return (
+  <View style={[styles.box, style]}> 
   {/* the following is the login phase code */}
     {phase === "login" && ( 
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", width: "100%" }}>
@@ -81,6 +108,31 @@ export default function GreenBox({ style }) {
     {phase === "branch" && (
         <View style={{ marginTop: 30, alignItems: "center" }}>
           <Text style={{ color: "white", fontSize: 24 }}>Branch Selection</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 20 }}>
+              {branches.map((branch, index) => (
+                <View
+                  key={index}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#ccc',
+                    padding: 20,
+                    borderRadius: 8,
+                    minWidth: 150,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 20,
+                    marginBottom: 20,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 2, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 2,
+                    elevation: 3,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, color: '#000' }}>{branch.Name}</Text>
+                </View>
+              ))}
+            </View>
             <Pressable
             onPress={handleBranchConfirm}
             style={{
@@ -103,15 +155,17 @@ export default function GreenBox({ style }) {
           <Text style={{ color: "white", fontSize: 24 }}>Welcome to the Home Screen!</Text>
         </View>
       )}
-    </View>;
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   box: {
-    width: "38%",
-    height: "45%",
-    backgroundColor: '#116C1B',
-  },
+    width: "39%",
+    minHeight: "45%",
+    backgroundColor: "#116C1B",
+    borderRadius: "4%"
+  }
 });
 
 
