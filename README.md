@@ -34,3 +34,66 @@ Create a `.env` file in the root of the `/client` folder and add your local IP a
 
 ```env
 IP_ADDRESS="Your IP Address"
+```
+
+*(Note: You can usually find your IP address by running `ipconfig` on Windows or `ifconfig` on Mac/Linux. This is often required for local mobile testing.)*
+
+### Server Environment Variables (`server/.env`)
+
+Create a `.env` file in the root of the `/server` folder. Add your necessary backend variables here:
+
+```env
+SUPABASE_URL="api_url"
+SUPABASE_KEY="api_key"
+```
+
+## 🛠️ Getting Started
+
+### Prerequisites
+
+Make sure you have the following installed on your local machine:
+
+* [Node.js](https://nodejs.org/) (v16 or higher recommended)
+* npm or yarn
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/HiyaMehta02/MCCAcademyApp.git](https://github.com/HiyaMehta02/MCCAcademyApp.git)
+   cd MCCAcademyApp
+   ```
+
+2. **Install Client Dependencies:**
+   ```bash
+   cd client
+   npm install
+   ```
+
+3. **Install Server Dependencies:**
+   ```bash
+   cd ../server
+   npm install
+   ```
+
+### Running the Application Locally
+
+**Starting the Client:**
+To run the mobile application in your development environment:
+
+```bash
+cd client
+npm run dev
+```
+
+**Starting the Server:**
+To run your backend database file:
+
+```bash
+cd server
+node database.js
+```
+
+---
+
+*Note: This is an active project in ongoing development.*
