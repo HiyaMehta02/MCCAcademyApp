@@ -83,7 +83,7 @@ To run the mobile application in your development environment:
 
 ```bash
 cd client
-npm run dev
+npm start
 ```
 
 **Starting the Server:**
