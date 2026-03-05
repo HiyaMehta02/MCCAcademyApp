@@ -91,7 +91,7 @@ To run your backend database file:
 
 ```bash
 cd server
-node database.js
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
