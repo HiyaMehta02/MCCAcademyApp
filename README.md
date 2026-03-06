@@ -3,7 +3,7 @@
 **🔗 Links:**
 * [GitHub Repository](https://github.com/HiyaMehta02/MCCAcademyApp)
 * [Figma Design & Prototypes](https://www.figma.com/design/1qdwx5CAK5xDp4qd2zrbPt/MCCC-APP?node-id=0-1&p=f&t=owy36VCPtUUc53Am-0)
-* [Supabase Database Dashboard](https://supabase.com/dashboard/project/fdnyfyvgohexlszuxwdv/editor/17412?schema=public)
+* [Supabase Database Dashboard](https://supabase.com/dashboard/project/wukmanrpnbfoyqtjdxjs)
 
 The MCCC Academy App is a dedicated mobile application designed for the Muscat Cricket Coaching Centre (MCCC). Built with a strong emphasis on intuitive UI/UX and user-centered design, the app serves as a centralized platform to connect coaches and players, streamlining scheduling, communication, and player development.
 
