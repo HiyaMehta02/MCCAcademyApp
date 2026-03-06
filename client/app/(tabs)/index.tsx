@@ -1,33 +1,9 @@
-import { Text, View, FlatList, Image } from "react-native";
-import { useState, useEffect } from "react";
+import { Text, View, Image } from "react-native";
 import GreenBox from '../../components/Login-Box';
 
-type Branch = {
-  BranchID: number;
-  Name: string;
-};
-
 export default function HomeScreen() {
-  const [branchs, setBranchs] = useState<Branch[]>([]);
-
-  // useEffect(() => {
-  //   async function fetchBranchs() {
-  //     try {
-  //       const apiIp = process.env.API_IP;
-  //       const res = await fetch(`http://${apiIp}:3000/branchs`);
-  //       const data: Branch[] = await res.json();
-  //       console.log(data);
-  //       setBranchs(data);
-  //     } catch (err) {
-  //       console.error("Error fetching branchs:", err);
-  //     }
-  //   }
-  //   fetchBranchs();
-  // }, []);
-
   return (
 <View style={{ padding: 20, backgroundColor: "#232323", flex: 1 }}>
-  {/* Row container: puts text and image side by side */}
   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
       <View
   style={{
@@ -42,7 +18,6 @@ export default function HomeScreen() {
   }}
 >
 </View>
-    {/* Text column */}
     <View>
       <Text style={{ paddingTop: 40, paddingLeft: 10, fontSize: 75, lineHeight: 65, fontFamily: "Montserrat", color: "white" }}>
         <Text style={{ fontWeight: "bold" }}>M</Text>USCAT
@@ -58,7 +33,6 @@ export default function HomeScreen() {
       </Text>
     </View>
 
-    {/* Image on the right */}
     <Image
       source={require("../../images/cricketman.png")}
       style={{
@@ -72,16 +46,6 @@ export default function HomeScreen() {
     />
     <GreenBox style={{ position: "absolute", bottom: "14%", left: "2.3%" }} />
   </View>
-      {/* <FlatList 
-        data={branchs}
-        keyExtractor={(item) => item.BranchID.toString()}
-        renderItem={({ item }) => (
-          <Text style={{ fontSize: 18, marginBottom: 10 }}>
-            {item.Name}
-          </Text>
-        )}
-      /> */}
     </View>
   );
 }
-

@@ -1,0 +1,53 @@
+// app.config.js — Node only, safe to use dotenv
+import 'dotenv/config'; // loads .env automatically when Expo starts
+
+export default ({ config }) => {
+  return {
+    ...config,
+    name: 'client',
+    slug: 'mccc-academy-app',
+    version: '1.0.0',
+    orientation: 'landscape',
+    icon: './assets/images/appIcon.png',
+    scheme: 'client',
+    userInterfaceStyle: 'automatic',
+    newArchEnabled: true,
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: 'com.hiyam.mcccacademyapp',
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false
+      }
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: './assets/images/appIcon.png',
+        backgroundColor: '#ffffff'
+      },
+      edgeToEdgeEnabled: true
+    },
+    plugins: [
+      'expo-router',
+      [
+        'expo-splash-screen',
+        {
+          image: './assets/images/appIcon.png',
+          imageWidth: 200,
+          resizeMode: 'contain',
+          backgroundColor: '#ffffff'
+        }
+      ]
+    ],
+    experiments: {
+      typedRoutes: true
+    },
+    extra: {
+      IP_ADDRESS: process.env.IP_ADDRESS, // safely loaded from .env
+      router: {},
+      eas: {
+        projectId: '9e355a03-62f7-4fa2-8406-ac578752d761'
+      }
+    },
+    owner: 'hiyam'
+  };
+};

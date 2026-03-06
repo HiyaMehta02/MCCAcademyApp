@@ -38,6 +38,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "IP_ADDRESS": "192.168.x.x", 
       "router": {},
       "eas": {
         "projectId": "9e355a03-62f7-4fa2-8406-ac578752d761"
