@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, Button, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator'; 
 
 const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS; 
 const SERVER_URL = `http://${apiIp}:8000`;
@@ -35,29 +36,36 @@ export default function AttendanceScanner() {
     
     try {
       setIsLoading(true);
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.1, base64: false });
+      
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo) throw new Error("Failed to capture photo.");
+
+      const fixedPhoto = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ rotate: 90 }], 
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
       const formData = new FormData();
       formData.append('file', {
-        uri: photo.uri,
+        uri: fixedPhoto.uri, 
         name: 'enroll_scan.jpg',
         type: 'image/jpeg',
       } as any);
 
       const response = await fetch(`${SERVER_URL}/enroll?name=${encodeURIComponent(studentName)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
 
       const result: AttendanceResponse = await response.json();
+      console.log("PYTHON SERVER SAID:", result);
 
-      if (response.ok) {
-        Alert.alert("Success!", result.message);
+      if (response.ok && !result.error) {
+        Alert.alert("Success!", result.message || "Student enrolled.");
         setStudentName(''); 
       } else {
-        Alert.alert("Error", result.error || "Could not save face.");
+        Alert.alert("Server Error", result.error || "Could not save face.");
       }
     } catch (error) {
       console.error(error);
@@ -72,26 +80,33 @@ export default function AttendanceScanner() {
     
     try {
       setIsLoading(true);
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.1, base64: false });
+      
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo) throw new Error("Failed to capture photo.");
+
+      const fixedPhoto = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ rotate: 90 }], 
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
       const formData = new FormData();
       formData.append('file', {
-        uri: photo.uri,
+        uri: fixedPhoto.uri, 
         name: 'attendance_scan.jpg',
         type: 'image/jpeg',
       } as any);
 
       const response = await fetch(`${SERVER_URL}/check-attendance`, {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
 
       const result: AttendanceResponse = await response.json();
-
-      if (response.ok) {
-        Alert.alert("Match Found!", result.message);
+      console.log("PYTHON SERVER SAID:", result);
+1
+      if (response.ok && !result.error) {
+        Alert.alert("Match Found!", result.message || "Attendance logged.");
       } else {
         Alert.alert("No Match", result.error || "Could not recognize face");
       }
@@ -155,7 +170,7 @@ const styles = StyleSheet.create({
   controlsContainer: {
     backgroundColor: 'rgba(0,0,0,0.8)',
     padding: 20,
-    paddingBottom: 40, // Extra padding for the bottom of the screen
+    paddingBottom: 40, 
     width: '100%',
     alignItems: 'center',
   },
