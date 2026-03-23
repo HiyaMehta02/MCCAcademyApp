@@ -205,6 +205,26 @@ export default function GreenBox({ style }) {
                     Add Student
                   </Text>
           </Pressable>
+          <Pressable
+                onPress={() => router.push('/Batch_Screen')}
+                  style={{
+                    borderWidth: 2,
+                    padding: 20,
+                    borderRadius: 8,
+                    minWidth: 150,
+                    width: '40%',
+                    height: '30%',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                    marginLeft: 10,
+                    elevation: 3,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, textAlign: 'center', color: 'white' }}>
+                    View Branches
+                  </Text>
+          </Pressable>
         </View>
       )}
     </View>

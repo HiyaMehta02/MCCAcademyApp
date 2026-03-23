@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, Button, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImageManipulator from 'expo-image-manipulator'; 
 
 const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS; 
 const SERVER_URL = `http://${apiIp}:8000`;
@@ -40,15 +39,9 @@ export default function AttendanceScanner() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo) throw new Error("Failed to capture photo.");
 
-      const fixedPhoto = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        [{ rotate: 90 }], 
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
       const formData = new FormData();
       formData.append('file', {
-        uri: fixedPhoto.uri, 
+        uri: photo.uri, 
         name: 'enroll_scan.jpg',
         type: 'image/jpeg',
       } as any);
@@ -84,15 +77,9 @@ export default function AttendanceScanner() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
       if (!photo) throw new Error("Failed to capture photo.");
 
-      const fixedPhoto = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        [{ rotate: 90 }], 
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
       const formData = new FormData();
       formData.append('file', {
-        uri: fixedPhoto.uri, 
+        uri: photo.uri, 
         name: 'attendance_scan.jpg',
         type: 'image/jpeg',
       } as any);
@@ -104,7 +91,7 @@ export default function AttendanceScanner() {
 
       const result: AttendanceResponse = await response.json();
       console.log("PYTHON SERVER SAID:", result);
-1
+
       if (response.ok && !result.error) {
         Alert.alert("Match Found!", result.message || "Attendance logged.");
       } else {
