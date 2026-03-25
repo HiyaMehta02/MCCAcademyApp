@@ -1,23 +1,29 @@
 import React, {useEffect, useState} from 'react';
-import { View, StyleSheet, Text, TextInput, Image, Pressable } from 'react-native';
+import { View, StyleSheet, Text, TextInput, Image, Pressable, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
+import Ionicons from '@expo/vector-icons/build/Ionicons';
 
 interface Branch {
-  name: string;
+  branch_id: string; // Good to have for keys
+  branch_name: string; // Change this from 'name'
 }
 
 export default function GreenBox({ style }) {
   const [phase, setPhase] = useState("login"); 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
 
   const handleLogin = () => {
     setPhase("branch");
   };
 
   const handleBranchConfirm = () => {
-    setPhase("menu");
+    router.push({ pathname:'/Batch_Screen', params: { branch_id: selectedBranch?.branch_id, branch_name: selectedBranch?.branch_name } });
+  };
+
+  const handleBack = () => {
+    setPhase("login");
   };
 
   useEffect(() => {
@@ -120,10 +126,10 @@ export default function GreenBox({ style }) {
               {branches.map((branch, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => setSelectedBranch(branch.name)}
+                  onPress={() => setSelectedBranch(branch)}
                   style={{
                     borderWidth: 2,
-                    borderColor: selectedBranch === branch.name ? '#ffffff' : '#2C2C2C',
+                    borderColor: selectedBranch === branch ? '#ffffff' : '#2C2C2C',
                     padding: 20,
                     borderRadius: 8,
                     minWidth: 150,
@@ -134,99 +140,43 @@ export default function GreenBox({ style }) {
                     marginRight: 10,
                     marginLeft: 10,
                     elevation: 3,
-                    backgroundColor: selectedBranch === branch.name ? '#ffffff' : '#2C2C2C',
+                    backgroundColor: selectedBranch === branch ? '#ffffff' : '#2C2C2C',
                   }}
                 >
-                  <Text style={{ fontSize: 20, color: selectedBranch === branch.name ? '#2C2C2C' : '#ffffff', textAlign: 'center' }}>
-                    {branch.name}
+                  <Text style={{ fontSize: 20, color: selectedBranch === branch ? '#2C2C2C' : '#ffffff', textAlign: 'center' }}>
+                    {branch.branch_name}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            <Pressable
-              onPress={handleBranchConfirm}
-              style={{
-                backgroundColor: "#ffffff",
-                width: "50%",
-                height: 50,
-                borderRadius: 8,
-                alignItems: "center",
-                justifyContent: "center",
-                marginTop: -20,
-              }}
-            >
-              <Text style={{ color: "#2C2C2C", fontSize: 18 }}>Next</Text>
-            </Pressable>
+            <View style={styles.footer}>
+              <TouchableOpacity 
+                onPress={handleBack} 
+                style={styles.footerBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={20} color="white" />
+                <Text style={styles.footerBtnText}>Back</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={handleBranchConfirm} 
+                disabled={!selectedBranch} 
+                style={[
+                  styles.footerBtn, 
+                  !selectedBranch && { opacity: 0.4 } 
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.footerBtnText}>Next</Text>
+                <Ionicons name="arrow-forward" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </View>
     )}
-      
-      {phase === "menu" && (
-        <View style={{ marginTop: 30, alignItems: "center" }}>
-          <Text style={{ color: "white", fontSize: 24 }}>Welcome to the Home Screen!</Text>
-          <Pressable
-                onPress={() => router.push('/Take_Attendance')}
-                  style={{
-                    borderWidth: 2,
-                    padding: 20,
-                    borderRadius: 8,
-                    minWidth: 150,
-                    width: '40%',
-                    height: '30%',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 10,
-                    marginLeft: 10,
-                    elevation: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 10, textAlign: 'center', color: 'white' }}>
-                    Take Attendance
-                  </Text>
-          </Pressable>
-          <Pressable
-                  style={{
-                    borderWidth: 2,
-                    padding: 20,
-                    borderRadius: 8,
-                    minWidth: 150,
-                    width: '40%',
-                    height: '30%',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 10,
-                    marginLeft: 10,
-                    elevation: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 10, textAlign: 'center', color: 'white' }}>
-                    Add Student
-                  </Text>
-          </Pressable>
-          <Pressable
-                onPress={() => router.push('/Batch_Screen')}
-                  style={{
-                    borderWidth: 2,
-                    padding: 20,
-                    borderRadius: 8,
-                    minWidth: 150,
-                    width: '40%',
-                    height: '30%',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 10,
-                    marginLeft: 10,
-                    elevation: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 10, textAlign: 'center', color: 'white' }}>
-                    View Branches
-                  </Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -237,5 +187,24 @@ const styles = StyleSheet.create({
     minHeight: "45%",
     backgroundColor: "#116C1B",
     borderRadius: 8,
-  }
+  },
+  footer: {
+    marginTop: -30,
+    flexDirection: 'row',
+    paddingVertical: 30,
+    gap: 20,
+  },
+  footerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4d1212', 
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 10,
+  },
+  footerBtnText: {
+    color: 'white',
+    fontSize: 16,
+  },
 });
