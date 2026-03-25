@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 import face_recognition
 import numpy as np
 from supabase import create_client, Client
@@ -12,30 +12,45 @@ app = FastAPI()
 supabase: Client = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
 
 @app.post("/enroll")
-async def enroll_player(name: str, file: UploadFile = File(...)):
-    
+async def enroll_player(
+    first_name: str = Form(...), 
+    last_name: str = Form(...), 
+    branch_id: str = Form(...),
+    file: UploadFile = File(...)
+):
+    # 1. Process the Image
     with open("debug_photo.jpg", "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
     file.file.seek(0) 
 
     image = face_recognition.load_image_file(file.file)
     face_encodings = face_recognition.face_encodings(image)
     
     if len(face_encodings) == 0:
-        return {"error": "No face found in the photo. Please check debug_photo.jpg on your computer!"}
+        return {"error": "No face found. Check debug_photo.jpg!"}
         
     embedding = face_encodings[0].tolist()
 
-    db_response = supabase.table("players").insert({
-        "name": name, 
+    student_response = supabase.table("students").insert({
+        "first_name": first_name,
+        "last_name": last_name,
+        "branch_id": branch_id
+    }).execute()
+
+    if not student_response.data:
+        return {"error": "Failed to create student record."}
+
+    new_student_id = student_response.data[0]["student_id"]
+
+    supabase.table("student_auth").insert({
+        "student_id": new_student_id,
         "face_embedding": embedding
     }).execute()
     
-    return {"message": f"Successfully enrolled {name}"}
+    return {"message": f"Successfully enrolled {first_name} {last_name}"}
 
 @app.post("/check-attendance")
-async def check_attendance(file: UploadFile = File(...)):
+async def check_attendance(batch_id: str = Form(...), file: UploadFile = File(...)):
     image = face_recognition.load_image_file(file.file)
     face_encodings = face_recognition.face_encodings(image)
     
@@ -50,18 +65,48 @@ async def check_attendance(file: UploadFile = File(...)):
     }).execute()
     
     if not response.data or len(response.data) == 0:
-        return {"error": "Face not recognized. Are you enrolled?"}
+        return {"error": "Face not recognized."}
         
-    match = response.data[0]
+    match = response.data[0] 
     
-    supabase.table("attendance_logs").insert({
-            "player_id": match["id"]
+    supabase.table("attendance").insert({
+            "student_id": match["student_id"],
+            "batch_id": batch_id,
+            "status": "Present"
         }).execute()
     
-    return {"message": f"Attendance logged for {match['name']}"}
+    return {"message": "Attendance logged successfully."}
 
 @app.get("/branches")
 async def get_branches():
-    print("Fetching branches from Supabase...")   
-    response = supabase.table("branches").select("name").execute()
+    # Make sure 'branch_id' is inside the select quotes!
+    response = supabase.table("branches").select("branch_id, branch_name").execute()
+    
+    # Add a print here to verify it's working in your Python terminal
+    print(f"Sending to App: {response.data}") 
+    
     return {"branches": response.data}
+
+@app.get("/batches/{branch_id}")
+async def get_batches(branch_id: str):
+    # This 'nested select' pulls the schedule rows inside the batch object
+    response = supabase.table("batches") \
+        .select("batch_id, batch_name, batch_schedule(day_of_week, start_time, end_time)") \
+        .eq("branch_id", branch_id) \
+        .execute()
+    
+    return {"batches": response.data}
+
+@app.get("/students/{batch_id}")
+async def get_students_by_batch(batch_id: str):
+    # We join batch_members with students. 
+    response = supabase.table("batch_members") \
+        .select("student_id, students(first_name, last_name, status, parent_phone)") \
+        .eq("batch_id", batch_id) \
+        .execute()
+    
+    if hasattr(response, 'error') and response.error:
+        print(f"Error: {response.error}")
+        return {"students": [], "error": str(response.error)}
+
+    return {"students": response.data}
