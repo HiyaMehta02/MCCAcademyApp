@@ -13,41 +13,25 @@ supabase: Client = create_client(os.environ.get("SUPABASE_URL"), os.environ.get(
 
 @app.post("/enroll")
 async def enroll_player(
-    first_name: str = Form(...), 
-    last_name: str = Form(...), 
-    branch_id: str = Form(...),
+    student_id: str = Form(...), # We only need the ID of the existing student
     file: UploadFile = File(...)
 ):
     # 1. Process the Image
-    with open("debug_photo.jpg", "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    file.file.seek(0) 
-
     image = face_recognition.load_image_file(file.file)
     face_encodings = face_recognition.face_encodings(image)
     
     if len(face_encodings) == 0:
-        return {"error": "No face found. Check debug_photo.jpg!"}
+        return {"error": "No face found."}
         
     embedding = face_encodings[0].tolist()
 
-    student_response = supabase.table("students").insert({
-        "first_name": first_name,
-        "last_name": last_name,
-        "branch_id": branch_id
-    }).execute()
-
-    if not student_response.data:
-        return {"error": "Failed to create student record."}
-
-    new_student_id = student_response.data[0]["student_id"]
-
-    supabase.table("student_auth").insert({
-        "student_id": new_student_id,
+    # 2. Just insert into student_auth (Linking face to existing student)
+    response = supabase.table("student_auth").insert({
+        "student_id": student_id,
         "face_embedding": embedding
     }).execute()
     
-    return {"message": f"Successfully enrolled {first_name} {last_name}"}
+    return {"message": "Face initialized successfully"}
 
 @app.post("/check-attendance")
 async def check_attendance(batch_id: str = Form(...), file: UploadFile = File(...)):

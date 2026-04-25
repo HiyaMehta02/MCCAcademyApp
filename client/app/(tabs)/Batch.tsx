@@ -25,7 +25,7 @@ interface Student {
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 5;
-const CARD_WIDTH = (width - 160) / COLUMN_COUNT;
+const CARD_WIDTH = (width - 200) / COLUMN_COUNT;
 
 const StudentCard = ({ name }: { name: string }) => (
   <View style={styles.card}>
@@ -111,7 +111,18 @@ export default function StudentDirectory() {
             <Text style={styles.attendanceBtnText}>Take attendance</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.initBtn}>
+          <TouchableOpacity 
+            style={styles.initBtn}
+            onPress={() => {
+                  router.push({
+                    pathname: '/Add_Student',
+                    params: { 
+                      batch_id: batch_id, 
+                      batch_name: batch_name
+                      }
+                  });
+              }}
+          >
             <Ionicons name="add-circle-outline" size={24} color="white" />
             <Text style={styles.initBtnText}>Initialization Student</Text>
           </TouchableOpacity>
