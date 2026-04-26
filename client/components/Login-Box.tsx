@@ -53,18 +53,29 @@ export default function GreenBox({ style }) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
         console.log("5. Browser session finished with result:", result.type);
 
-      if (result.type === 'success') {
+if (result.type === 'success' && result.url) {
         const { url } = result;
-        // Use a more robust way to grab the tokens from the hash
-        const fragment = url.split('#')[1];
-        if (fragment) {
-          const params = Object.fromEntries(new URLSearchParams(fragment));
+        console.log("6. Received URL:", url);
+
+        const parts = url.includes('#') ? url.split('#')[1] : url.split('?')[1];
+        
+        if (parts) {
+          const params = Object.fromEntries(new URLSearchParams(parts));
+          
           if (params.access_token) {
-            await supabase.auth.setSession({
+            console.log("7. Access token found, setting session...");
+            const { error: sessionError } = await supabase.auth.setSession({
               access_token: params.access_token,
               refresh_token: params.refresh_token,
             });
-            setPhase("branch");
+
+            if (!sessionError) {
+              setPhase("branch");
+            } else {
+              Alert.alert("Session Error", sessionError.message);
+            }
+          } else {
+            console.log("7. No access token in URL parts:", params);
           }
         }
       }
