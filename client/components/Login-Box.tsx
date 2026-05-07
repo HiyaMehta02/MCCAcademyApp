@@ -15,11 +15,40 @@ interface Branch {
 }
 
 export default function GreenBox({ style }) {
-  const [phase, setPhase] = useState("login");
+  const [authResolved, setAuthResolved] = useState(false);
+  /** Landing is always login first; branch only after Google sign-in or explicit "Continue". */
+  const [phase, setPhase] = useState<"login" | "branch">("login");
+  const [hasSession, setHasSession] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
+  const [branchRetryToken, setBranchRetryToken] = useState(0);
   const [authLoading, setAuthLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setHasSession(!!data.session?.user);
+      setAuthResolved(true);
+    });
+
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setHasSession(!!session?.user);
+      setAuthResolved(true);
+      if (!session?.user) {
+        setPhase("login");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      authSub.subscription.unsubscribe();
+    };
+  }, []);
 
   // GOOGLE LOGIN LOGIC
   const handleGoogleLogin = async () => {
@@ -70,6 +99,7 @@ if (result.type === 'success' && result.url) {
             });
 
             if (!sessionError) {
+              setHasSession(true);
               setPhase("branch");
             } else {
               Alert.alert("Session Error", sessionError.message);
@@ -84,7 +114,7 @@ if (result.type === 'success' && result.url) {
       }
     } catch (err) {
       console.error("Full Catch Error:", err);
-      Alert.alert("Login Error", err.message);
+      Alert.alert("Login Error", err instanceof Error ? err.message : String(err));
     } finally {
       setAuthLoading(false);
     }
@@ -101,60 +131,115 @@ if (result.type === 'success' && result.url) {
   };
 
   useEffect(() => {
-    async function fetchBranches() {
+    if (phase !== "branch") return;
+
+    let cancelled = false;
+
+    async function loadBranches() {
+      setLoading(true);
+      setBranchError(null);
+
       try {
-        const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS;
-        const response = await fetch(`http://${apiIp}:8000/branches`);
-        if (!response.ok) throw new Error("Failed to fetch branches");
-        const data = await response.json();
-        setBranches(data.branches);
-      } catch (error) {
-        console.error(error);
+        const { data, error } = await supabase
+          .from("branches")
+          .select("branch_id, branch_name")
+          .or("status.eq.active,status.is.null")
+          .order("branch_name");
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        if (data && data.length > 0) {
+          setBranches(data);
+          return;
+        }
+        setBranches([]);
+        setBranchError("No branches found. Add rows in Supabase → public.branches.");
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "Could not load branches.";
+        console.error("loadBranches:", err);
+        setBranchError(message);
+        setBranches([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
-    fetchBranches();
-  }, []);
+
+    loadBranches();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, branchRetryToken]);
 
   return (
     <View style={[styles.box, style]}>
-      {phase === "login" && (
+      {!authResolved ? (
+        <View style={[styles.contentContainer, { minHeight: 200 }]}>
+          <ActivityIndicator size="large" color="white" />
+        </View>
+      ) : null}
+      {authResolved && phase === "login" && (
         <View style={styles.contentContainer}>
           <Text style={styles.title}>Coach Login</Text>
           <Text style={styles.subtitle}>Sign in with your Google account to access the MCC Academy system.</Text>
-          
-          <TouchableOpacity
-            onPress={handleGoogleLogin}
-            disabled={authLoading}
-            style={[
-              styles.googleBtn,
-              { opacity: authLoading ? 0.7 : 1 }
-            ]}
-          >
-            {authLoading ? (
-              <ActivityIndicator color="black" />
-            ) : (
-              <View style={styles.googleBtnContent}>
-                <Ionicons name="logo-google" size={20} color="#EA4335" />
-                <Text style={styles.googleBtnText}>Sign in with Google</Text>
-              </View>
-            )}
-          </TouchableOpacity>
 
-          <Image
-            source={require("../images/Logo.png")}
-            style={styles.logo}
-          />
+          {!hasSession ? (
+            <TouchableOpacity
+              onPress={handleGoogleLogin}
+              disabled={authLoading}
+              style={[styles.googleBtn, { opacity: authLoading ? 0.7 : 1 }]}
+            >
+              {authLoading ? (
+                <ActivityIndicator color="black" />
+              ) : (
+                <View style={styles.googleBtnContent}>
+                  <Ionicons name="logo-google" size={20} color="#EA4335" />
+                  <Text style={styles.googleBtnText}>Sign in with Google</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: "100%", alignItems: "center", gap: 12 }}>
+              <Text style={[styles.subtitle, { marginBottom: 8 }]}>You're signed in.</Text>              <TouchableOpacity
+                style={[styles.googleBtn, { backgroundColor: "#ffffff" }]}
+                onPress={() => setPhase("branch")}
+              >
+                <Text style={styles.googleBtnText}>Continue to branch selection</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.linkOutBtn}
+                onPress={() => supabase.auth.signOut()}
+              >
+                <Text style={styles.linkOutText}>Sign out</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Image source={require("../images/Logo.png")} style={styles.logo} />
         </View>
       )}
 
-      {phase === "branch" && (
+      {authResolved && phase === "branch" && (
         <View style={{ marginTop: 30, alignItems: "center", width: '100%' }}>
           <Text style={styles.branchTitle}>Select your branch</Text>
           
           {loading ? (
             <ActivityIndicator size="large" color="white" style={{ marginTop: 40 }} />
+          ) : branchError ? (
+            <View style={{ marginTop: 20, paddingHorizontal: 12, alignItems: "center" }}>
+              <Text style={[styles.subtitle, { marginBottom: 16 }]}>{branchError}</Text>
+              <TouchableOpacity
+                style={styles.footerBtn}
+                onPress={() => {
+                  setBranchError(null);
+                  setBranchRetryToken((n) => n + 1);
+                }}
+              >
+                <Text style={styles.footerBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <>
               <View style={styles.branchGrid}>
@@ -249,4 +334,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footerBtnText: { color: 'white', fontSize: 16 },
+  linkOutBtn: { paddingVertical: 8, paddingHorizontal: 12 },
+  linkOutText: { color: "rgba(255,255,255,0.85)", fontSize: 15, textDecorationLine: "underline" },
 });

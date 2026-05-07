@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
+import { supabase } from '../../lib/supabase';
 
 // 1. Update the interface to include the schedule list
 interface BatchSchedule {
@@ -23,7 +24,13 @@ interface BatchSchedule {
 interface Batch {
   batch_id: string;
   batch_name: string;
-  batch_schedule: BatchSchedule[]; // This matches the key from Supabase
+  batch_schedule: BatchSchedule[];
+}
+
+function normalizeTime(t: string | null | undefined): string {
+  if (t == null) return '';
+  const s = String(t);
+  return s.length >= 5 ? s.slice(0, 5) : s;
 }
 
 const BatchRow: React.FC<{ batch: Batch }> = ({ batch }) => {
@@ -55,8 +62,8 @@ const BatchRow: React.FC<{ batch: Batch }> = ({ batch }) => {
           batch.batch_schedule.map((item, index) => (
             <View key={index} style={styles.dayBox}>
               {/* Slice(0,3) turns "Monday" into "Mon" */}
-              <Text style={styles.dayText}>{item.day_of_week.slice(0, 3)}</Text>
-              <Text style={styles.timeText}>{item.start_time.slice(0, 5)}</Text>
+              <Text style={styles.dayText}>{(item.day_of_week ?? '').slice(0, 3)}</Text>
+              <Text style={styles.timeText}>{normalizeTime(item.start_time)}</Text>
             </View>
           ))
         ) : (
@@ -69,25 +76,60 @@ const BatchRow: React.FC<{ batch: Batch }> = ({ batch }) => {
 
 export default function Batch_Screen() {
   const { branch_id, branch_name } = useLocalSearchParams();
+  const branchId = Array.isArray(branch_id) ? branch_id[0] : branch_id;
   const [searchTerm, setSearchTerm] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchBatches() {
+      if (!branchId) return;
+      setLoading(true);
+      setLoadError(null);
       try {
-        const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS;
-        const response = await fetch(`http://${apiIp}:8000/batches/${branch_id}`);
-        const data = await response.json();
-        setBatches(data.batches);
-      } catch (error) {
-        console.error("Error fetching batches:", error);
+        const { data, error } = await supabase
+          .from('batches')
+          .select(`
+            batch_id,
+            batch_name,
+            batch_schedule (
+              day_of_week,
+              start_time,
+              end_time
+            )
+          `)
+          .eq('branch_id', branchId)
+          .or('status.eq.active,status.is.null')
+          .order('batch_name');
+
+        if (error) throw error;
+
+        const rows = (data ?? []).map((row: any) => ({
+          batch_id: row.batch_id,
+          batch_name: row.batch_name,
+          batch_schedule: Array.isArray(row.batch_schedule) ? row.batch_schedule : [],
+        })) as Batch[];
+
+        if (rows.length > 0) {
+          setBatches(rows);
+          return;
+        }
+        setBatches([]);
+      } catch (error: unknown) {
+        console.error('Error fetching batches:', error);
+        const msg =
+          error instanceof Error
+            ? error.message
+            : 'Could not load batches.';
+        setLoadError(msg);
+        setBatches([]);
       } finally {
         setLoading(false);
       }
     }
-    if (branch_id) fetchBatches();
-  }, [branch_id]);
+    fetchBatches();
+  }, [branchId]);
 
   const filteredBatches = batches.filter(b => 
     b.batch_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -122,6 +164,10 @@ export default function Batch_Screen() {
       <View style={styles.greenCard}>
         {loading ? (
           <ActivityIndicator size="large" color="white" style={{ marginTop: 50 }} />
+        ) : loadError ? (
+          <Text style={{ color: 'white', textAlign: 'center', marginTop: 24, paddingHorizontal: 16 }}>
+            {loadError}
+          </Text>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
             {filteredBatches.map((batch) => (
@@ -134,6 +180,10 @@ export default function Batch_Screen() {
         )}
       </View>
       <View style={styles.footer}>
+        <TouchableOpacity style={styles.footerBtn} onPress={() => router.push("/Coach_Requests")}>
+          <Ionicons name="shield-checkmark-outline" size={20} color="white" />
+          <Text style={styles.footerBtnText}>Coach Requests</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.footerBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-undo-sharp" size={20} color="white" />
           <Text style={styles.footerBtnText}>Back</Text>

@@ -6,6 +6,8 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
+import { getApiBaseUrl } from "../../lib/apiBaseUrl";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -13,9 +15,6 @@ const COLUMN_COUNT = 4;
 const CARD_MARGIN = 8;
 const GRID_PADDING = 20;
 const CARD_WIDTH = (SCREEN_WIDTH - (GRID_PADDING * 2) - (CARD_MARGIN * COLUMN_COUNT * 2)) / COLUMN_COUNT;
-
-const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS;
-const SERVER_URL = `http://${apiIp}:8000`;
 
 interface Student {
   student_id: string; 
@@ -28,6 +27,7 @@ interface Student {
 
 export default function TakeAttendance() {
   const { batch_id, batch_name } = useLocalSearchParams();
+  const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
   const router = useRouter();
   
   const [permission, requestPermission] = useCameraPermissions();
@@ -49,12 +49,11 @@ export default function TakeAttendance() {
 
   useEffect(() => {
     async function fetchStudents() {
-      if (!batch_id) return;
+      if (!batchId) return;
       try {
         setFetching(true);
-        const response = await fetch(`${SERVER_URL}/students/${batch_id}`);
-        const data = await response.json();
-        setStudents(data.students || []);
+        const rows = await fetchStudentsForBatch(batchId);
+        setStudents(rows);
       } catch (error) {
         console.error("Error fetching students:", error);
       } finally {
@@ -62,7 +61,7 @@ export default function TakeAttendance() {
       }
     }
     fetchStudents();
-  }, [batch_id]);
+  }, [batchId]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -85,7 +84,7 @@ export default function TakeAttendance() {
     })
   ).current;
 
-  // NEW: Logic to process attendance with the face scan
+  // Face verification + DB write via backend (same as original app)
   const handleAttendance = async () => {
     if (!selectedStudent) {
       Alert.alert("No Selection", "Please select a student from the list first.");
@@ -93,35 +92,53 @@ export default function TakeAttendance() {
     }
     if (!cameraRef.current) return;
 
+    const SERVER_URL = getApiBaseUrl();
+    if (!SERVER_URL) {
+      Alert.alert(
+        "Missing API URL",
+        "Set EXPO_PUBLIC_API_BASE_URL (e.g. http://YOUR_PC_IP:8000) or EXPO_PUBLIC_IP_ADDRESS in .env."
+      );
+      return;
+    }
+
     try {
       setIsLoading(true);
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      
+
       const formData = new FormData();
-      formData.append('student_id', selectedStudent.student_id);
-      formData.append('batch_id', batch_id as string);
-      formData.append('status', 'Present');
-      formData.append('file', {
+      formData.append("student_id", selectedStudent.student_id);
+      formData.append("batch_id", batchId as string);
+      formData.append("status", "Present");
+      formData.append("file", {
         uri: photo.uri,
-        name: 'attendance.jpg',
-        type: 'image/jpeg',
+        name: "attendance.jpg",
+        type: "image/jpeg",
       } as any);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120_000);
       const response = await fetch(`${SERVER_URL}/check-attendance`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 
       if (response.ok) {
         Alert.alert("Success", `Attendance marked for ${selectedStudent.students.first_name}`);
-        setSelectedStudent(null); // Clear selection after success
+        setSelectedStudent(null);
       } else {
         Alert.alert("Error", result.error || "Recognition failed.");
       }
     } catch (error) {
-      Alert.alert("Network Error", "Could not connect to the server.");
+      Alert.alert(
+        "Network Error",
+        error instanceof Error && error.name === "AbortError"
+          ? "Request timed out. Check API URL and that the server is running."
+          : "Could not connect to the server."
+      );
     } finally {
       setIsLoading(false);
     }

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router'; // Added useLocalSearchParams
+import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
 
 interface Student {
   student_id: string; 
@@ -40,7 +41,8 @@ const StudentCard = ({ name }: { name: string }) => (
 );
 
 export default function StudentDirectory() {
-  const { batch_id, batch_name } = useLocalSearchParams(); // Get params from Batch Screen
+  const { batch_id, batch_name } = useLocalSearchParams();
+  const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
   const [search, setSearch] = useState('');
   
   const [students, setStudents] = useState<Student[]>([]);
@@ -48,21 +50,18 @@ export default function StudentDirectory() {
 
   useEffect(() => {
     async function fetchStudents() {
+      if (!batchId) return;
       try {
-        const apiIp = process.env.EXPO_PUBLIC_IP_ADDRESS; 
-        const response = await fetch(`http://${apiIp}:8000/students/${batch_id}`);
-        const data = await response.json();
-        
-        setStudents(data.students);
-        console.log("Fetched students for batch:", batch_id, data.students);
+        const rows = await fetchStudentsForBatch(batchId);
+        setStudents(rows);
       } catch (error) {
         console.error("Error fetching students:", error);
       } finally {
         setLoading(false);
       }
     }
-    if (batch_id) fetchStudents();
-  }, [batch_id]);
+    fetchStudents();
+  }, [batchId]);
 
   const filteredStudents = students.filter(item => {
     const fullName = `${item.students.first_name} ${item.students.last_name}`.toLowerCase();
@@ -102,7 +101,7 @@ export default function StudentDirectory() {
                   router.push({
                     pathname: '/Take_Attendance',
                     params: { 
-                        batch_id: batch_id, 
+                        batch_id: batchId, 
                         batch_name: batch_name 
                     }
                   });
@@ -117,7 +116,7 @@ export default function StudentDirectory() {
                   router.push({
                     pathname: '/Add_Student',
                     params: { 
-                      batch_id: batch_id, 
+                      batch_id: batchId, 
                       batch_name: batch_name
                       }
                   });
