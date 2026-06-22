@@ -20,7 +20,8 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 560,
-    minHeight: 360,
+    minHeight: 520,
+    paddingVertical: 28,
   },
 });
 

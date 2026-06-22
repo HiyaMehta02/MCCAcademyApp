@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, ActivityIndicator, Alert, TextInput, 
-  TouchableOpacity, FlatList, Image, Dimensions, Animated, PanResponder, Button, Platform 
+  TouchableOpacity, FlatList, Image, Dimensions, Animated, PanResponder, Button 
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -96,7 +96,7 @@ export default function TakeAttendance() {
     if (!SERVER_URL) {
       Alert.alert(
         "Missing API URL",
-        "Set EXPO_PUBLIC_API_BASE_URL (e.g. http://YOUR_PC_IP:8000) or EXPO_PUBLIC_IP_ADDRESS in .env."
+        "Set EXPO_PUBLIC_API_BASE_URL (e.g. http://YOUR_PC_IP:8000) or EXPO_PUBLIC_IP_ADDRESS in client/.env (no spaces around =)."
       );
       return;
     }
@@ -108,7 +108,6 @@ export default function TakeAttendance() {
       const formData = new FormData();
       formData.append("student_id", selectedStudent.student_id);
       formData.append("batch_id", batchId as string);
-      formData.append("status", "Present");
       formData.append("file", {
         uri: photo.uri,
         name: "attendance.jpg",
@@ -117,14 +116,31 @@ export default function TakeAttendance() {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120_000);
-      const response = await fetch(`${SERVER_URL}/check-attendance`, {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      let response: Response;
+      try {
+        response = await fetch(`${SERVER_URL}/check-attendance`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+      } catch (fetchErr) {
+        const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        Alert.alert(
+          "Network Error",
+          `Could not reach:\n${SERVER_URL}/check-attendance\n\n${msg}\n\n• Run your API on port 8000\n• Same Wi‑Fi as this device\n• Use EXPO_PUBLIC_API_BASE_URL in .env\n• Rebuild dev client after app.config.js change.`
+        );
+        return;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
-      const result = await response.json();
+      let result: { error?: string } = {};
+      try {
+        const text = await response.text();
+        result = text ? JSON.parse(text) : {};
+      } catch {
+        result = { error: `HTTP ${response.status} (not JSON)` };
+      }
 
       if (response.ok) {
         Alert.alert("Success", `Attendance marked for ${selectedStudent.students.first_name}`);
@@ -133,11 +149,12 @@ export default function TakeAttendance() {
         Alert.alert("Error", result.error || "Recognition failed.");
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       Alert.alert(
-        "Network Error",
+        "Error",
         error instanceof Error && error.name === "AbortError"
-          ? "Request timed out. Check API URL and that the server is running."
-          : "Could not connect to the server."
+          ? `Timed out calling ${SERVER_URL}/check-attendance`
+          : msg
       );
     } finally {
       setIsLoading(false);
@@ -184,6 +201,10 @@ export default function TakeAttendance() {
                 {isLoading ? <ActivityIndicator color="black" /> : <View style={styles.captureInner} />}
             </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.faceHint} pointerEvents="none">
+        <Text style={styles.faceHintText}>Only one face should be visible in the frame.</Text>
       </View>
 
       <Animated.View 
@@ -273,6 +294,18 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50'
   },
   activeText: { color: '#4CAF50', fontWeight: 'bold' },
+  faceHint: {
+    position: 'absolute',
+    bottom: SCREEN_HEIGHT * 0.27,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    zIndex: 5,
+  },
+  faceHintText: { color: '#eee', fontSize: 12, textAlign: 'center' },
   cameraTriggerContainer: {
     width: 65,
     height: 65,

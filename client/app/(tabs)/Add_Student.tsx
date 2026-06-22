@@ -96,7 +96,7 @@ export default function AddStudent() {
     if (!SERVER_URL) {
       Alert.alert(
         "Missing API URL",
-        "Set EXPO_PUBLIC_API_BASE_URL (e.g. http://YOUR_PC_IP:8000) or EXPO_PUBLIC_IP_ADDRESS in .env."
+        "Set EXPO_PUBLIC_API_BASE_URL (e.g. http://YOUR_PC_IP:8000) or EXPO_PUBLIC_IP_ADDRESS in client/.env (no spaces around =)."
       );
       return;
     }
@@ -115,26 +115,45 @@ export default function AddStudent() {
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120_000);
-        const response = await fetch(`${SERVER_URL}/enroll`, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        let response: Response;
+        try {
+          response = await fetch(`${SERVER_URL}/enroll`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+        } catch (fetchErr) {
+          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+          Alert.alert(
+            "Network Error",
+            `Could not reach:\n${SERVER_URL}/enroll\n\n${msg}\n\n• Run your API on port 8000\n• Same Wi‑Fi as this device\n• Use EXPO_PUBLIC_API_BASE_URL=http://<PC_LAN_IP>:8000 in .env\n• On Android: rebuild app after app.config.js changes (cleartext HTTP).`
+          );
+          return;
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
-        const result = await response.json();
+        let result: { error?: string } = {};
+        try {
+          const text = await response.text();
+          result = text ? JSON.parse(text) : {};
+        } catch {
+          result = { error: `Server returned HTTP ${response.status} (not JSON)` };
+        }
+
         if (response.ok) {
         Alert.alert("Success", "Face initialized!");
         router.back();
         } else {
-        Alert.alert("Error", result.error || "Failed.");
+        Alert.alert("Error", result.error || `Failed (HTTP ${response.status}).`);
         }
     } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         Alert.alert(
-          "Network Error",
+          "Error",
           error instanceof Error && error.name === "AbortError"
-            ? "Request timed out. Check API URL and that the server is running."
-            : "Could not connect to the server."
+            ? `Timed out calling ${SERVER_URL}/enroll`
+            : msg
         );
     } finally {
         setIsLoading(false);
@@ -179,6 +198,10 @@ export default function AddStudent() {
                 {isLoading ? <ActivityIndicator color="black" /> : <View style={styles.captureInner} />}
             </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.faceHint} pointerEvents="none">
+        <Text style={styles.faceHintText}>Only one face should be visible in the frame.</Text>
       </View>
 
       <Animated.View 
@@ -240,6 +263,18 @@ const styles = StyleSheet.create({
   backBtnText: { color: 'white', fontSize: 16 },
   activeLabel: { backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#4CAF50' },
   activeText: { color: '#4CAF50', fontWeight: 'bold' },
+  faceHint: {
+    position: 'absolute',
+    bottom: SCREEN_HEIGHT * 0.27,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    zIndex: 5,
+  },
+  faceHintText: { color: '#eee', fontSize: 12, textAlign: 'center' },
   cameraTriggerContainer: { width: 65, height: 65, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   captureCircle: { width: 55, height: 55, borderRadius: 30, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
   captureInner: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: '#ccc' },

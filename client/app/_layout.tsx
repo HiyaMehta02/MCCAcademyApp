@@ -11,26 +11,27 @@ function normalizePath(path: string | null | undefined): string {
 type GateState = {
   loading: boolean;
   signedIn: boolean;
+  mustSetPassword: boolean;
   accessStatus: "approved" | "pending" | "rejected" | "suspended" | "none";
 };
 
-async function getAccessStatus(userId: string): Promise<GateState["accessStatus"]> {
+async function getAccessStatus(): Promise<Pick<GateState, "accessStatus" | "mustSetPassword">> {
   const { data: coachStatus } = await supabase.rpc("current_coach_status");
-  if (coachStatus === "approved" || coachStatus === "pending" || coachStatus === "rejected" || coachStatus === "suspended") {
-    return coachStatus;
+  const status =
+    coachStatus === "approved" ||
+    coachStatus === "pending" ||
+    coachStatus === "rejected" ||
+    coachStatus === "suspended"
+      ? coachStatus
+      : "none";
+
+  let mustSetPassword = false;
+  if (status === "approved") {
+    const { data: mustChange } = await supabase.rpc("coach_must_set_password");
+    mustSetPassword = Boolean(mustChange);
   }
 
-  const { data: requestRow } = await supabase
-    .from("coach_access_requests")
-    .select("status")
-    .eq("auth_user_id", userId)
-    .maybeSingle();
-
-  if (requestRow?.status === "pending" || requestRow?.status === "rejected") {
-    return requestRow.status;
-  }
-
-  return "none";
+  return { accessStatus: status, mustSetPassword };
 }
 
 export default function Layout() {
@@ -39,6 +40,7 @@ export default function Layout() {
   const [gate, setGate] = useState<GateState>({
     loading: true,
     signedIn: false,
+    mustSetPassword: false,
     accessStatus: "none",
   });
 
@@ -53,13 +55,23 @@ export default function Layout() {
       if (!mounted) return;
 
       if (!session?.user) {
-        setGate({ loading: false, signedIn: false, accessStatus: "none" });
+        setGate({
+          loading: false,
+          signedIn: false,
+          mustSetPassword: false,
+          accessStatus: "none",
+        });
         return;
       }
 
-      const status = await getAccessStatus(session.user.id);
+      const { accessStatus, mustSetPassword } = await getAccessStatus();
       if (!mounted) return;
-      setGate({ loading: false, signedIn: true, accessStatus: status });
+      setGate({
+        loading: false,
+        signedIn: true,
+        mustSetPassword,
+        accessStatus,
+      });
     }
 
     refreshGate();
@@ -74,7 +86,14 @@ export default function Layout() {
     };
   }, []);
 
-  const AUTH_ONLY_PREFIXES = ["/login", "/request-access", "/pending", "/rejected", "/suspended"];
+  const AUTH_ONLY_PREFIXES = [
+    "/login",
+    "/set-password",
+    "/no-access",
+    "/pending",
+    "/rejected",
+    "/suspended",
+  ];
 
   useEffect(() => {
     if (gate.loading) return;
@@ -88,8 +107,15 @@ export default function Layout() {
       return;
     }
 
+    if (gate.mustSetPassword) {
+      if (p !== "/set-password") router.replace("/set-password");
+      return;
+    }
+
     if (gate.accessStatus === "approved") {
-      const onAuthOnlyScreen = AUTH_ONLY_PREFIXES.some((route) => p === route || p.startsWith(`${route}/`));
+      const onAuthOnlyScreen = AUTH_ONLY_PREFIXES.some(
+        (route) => p === route || p.startsWith(`${route}/`)
+      );
       if (onAuthOnlyScreen) {
         router.replace("/(tabs)");
       }
@@ -109,9 +135,9 @@ export default function Layout() {
       return;
     }
     if (gate.accessStatus === "none") {
-      if (p !== "/request-access") router.replace("/request-access");
+      if (p !== "/no-access") router.replace("/no-access");
     }
-  }, [gate.loading, gate.signedIn, gate.accessStatus, pathname, router]);
+  }, [gate.loading, gate.signedIn, gate.mustSetPassword, gate.accessStatus, pathname, router]);
 
   if (gate.loading) {
     return (
@@ -124,7 +150,8 @@ export default function Layout() {
   return (
     <Stack>
       <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="request-access" options={{ headerShown: false }} />
+      <Stack.Screen name="set-password" options={{ headerShown: false }} />
+      <Stack.Screen name="no-access" options={{ headerShown: false }} />
       <Stack.Screen name="pending" options={{ headerShown: false }} />
       <Stack.Screen name="rejected" options={{ headerShown: false }} />
       <Stack.Screen name="suspended" options={{ headerShown: false }} />

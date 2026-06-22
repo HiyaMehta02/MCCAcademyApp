@@ -30,13 +30,21 @@ To run this project locally, you will need to create `.env` files in both the cl
 
 ### Client Environment Variables (`client/.env`)
 
-Create a `.env` file in the root of the `/client` folder and add your local IP address:
+Create `/client/.env` (see `client/.env.example`). The face API URL must be reachable from the **phone on Wi‑Fi**:
 
 ```env
-IP_ADDRESS="Your IP Address"
+EXPO_PUBLIC_API_BASE_URL=http://YOUR_PC_WIFI_IPV4:8000
 ```
 
-*(Note: You can usually find your IP address by running `ipconfig` on Windows or `ifconfig` on Mac/Linux. This is often required for local mobile testing.)*
+Or:
+
+```env
+EXPO_PUBLIC_IP_ADDRESS=YOUR_PC_WIFI_IPV4
+```
+
+Use **`ipconfig`** (Windows) and the **Wi‑Fi** adapter’s **IPv4** — not `127.0.0.1`, and usually not VirtualBox (`192.168.56.x`) or WSL/Hyper-V-only addresses. After changing values, run `npx expo start -c` so the bundle picks up `EXPO_PUBLIC_*`.
+
+Run **`scripts/check-face-api-network.ps1`** for a local checklist. Start the API with **`--host 0.0.0.0`** (see below) and allow **inbound TCP 8000** in Windows Firewall if the phone still cannot connect.
 
 ### Server Environment Variables (`server/.env`)
 

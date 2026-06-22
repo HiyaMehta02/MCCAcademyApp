@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
 type CoachRequest = {
@@ -83,8 +84,14 @@ export default function CoachRequestsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#116C1B" />
+      <View style={styles.container}>
+        <TouchableOpacity style={styles.backToBatchesBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="white" />
+          <Text style={styles.backToBatchesText}>Back to batches</Text>
+        </TouchableOpacity>
+        <View style={styles.centerFill}>
+          <ActivityIndicator size="large" color="#116C1B" />
+        </View>
       </View>
     );
   }
@@ -93,8 +100,9 @@ export default function CoachRequestsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.title}>Admin access required</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Back</Text>
+        <TouchableOpacity style={styles.backToBatchesBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="white" />
+          <Text style={styles.backToBatchesText}>Back to batches</Text>
         </TouchableOpacity>
       </View>
     );
@@ -102,7 +110,19 @@ export default function CoachRequestsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Coach Access Requests</Text>
+      <TouchableOpacity style={styles.backToBatchesBtn} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={20} color="white" />
+        <Text style={styles.backToBatchesText}>Back to batches</Text>
+      </TouchableOpacity>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Coach Access Requests</Text>
+        <TouchableOpacity
+          style={styles.manageBtn}
+          onPress={() => router.push("/(tabs)/Manage_Coaches")}
+        >
+          <Text style={styles.manageBtnText}>+ Create coach</Text>
+        </TouchableOpacity>
+      </View>
       <FlatList
         data={requests}
         keyExtractor={(item) => item.request_id}
@@ -144,8 +164,35 @@ export default function CoachRequestsScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: "#181818", justifyContent: "center", alignItems: "center", padding: 20 },
+  centerFill: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1, backgroundColor: "#181818", padding: 20 },
-  title: { color: "white", fontSize: 28, fontWeight: "700", marginBottom: 14 },
+  backToBatchesBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#4d1212",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    marginBottom: 16,
+  },
+  backToBatchesText: { color: "white", fontSize: 16, fontWeight: "600" },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    gap: 12,
+  },
+  manageBtn: {
+    backgroundColor: "#116C1B",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  manageBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
+  title: { color: "white", fontSize: 28, fontWeight: "700", flex: 1 },
   empty: { color: "#d0d0d0", textAlign: "center", marginTop: 24 },
   card: { backgroundColor: "#262626", borderRadius: 12, padding: 14, marginBottom: 12 },
   name: { color: "white", fontSize: 20, fontWeight: "600" },
@@ -158,7 +205,5 @@ const styles = StyleSheet.create({
   rejectBtn: { backgroundColor: "#8b2323" },
   actionText: { color: "white", fontWeight: "700" },
   disabled: { opacity: 0.6 },
-  backBtn: { marginTop: 12, backgroundColor: "#4d1212", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 20 },
-  backBtnText: { color: "white", fontWeight: "600" },
 });
 
