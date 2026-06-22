@@ -11,6 +11,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleProp,
+  ViewStyle,
 } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/build/Ionicons";
@@ -28,7 +31,7 @@ interface Branch {
 }
 
 type GreenBoxProps = {
-  style?: object;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function GreenBox({ style }: GreenBoxProps) {
@@ -163,8 +166,14 @@ export default function GreenBox({ style }: GreenBoxProps) {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.box, style]}
     >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
       {!authResolved ? (
-        <View style={[styles.contentContainer, { minHeight: 200 }]}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="white" />
         </View>
       ) : null}
@@ -234,7 +243,7 @@ export default function GreenBox({ style }: GreenBoxProps) {
       )}
 
       {authResolved && phase === "branch" && hasSession && (
-        <View style={{ marginTop: 30, alignItems: "center", width: "100%" }}>
+        <View style={styles.branchContainer}>
           <Text style={styles.branchTitle}>Select your branch</Text>
 
           {loading ? (
@@ -307,36 +316,52 @@ export default function GreenBox({ style }: GreenBoxProps) {
           )}
         </View>
       )}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   box: {
-    width: "39%",
-    minHeight: "55%",
     backgroundColor: "#116C1B",
     borderRadius: 8,
-    padding: 20,
-    paddingVertical: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    overflow: "hidden",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingVertical: 4,
+  },
+  loadingContainer: {
+    minHeight: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   contentContainer: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
     paddingVertical: 8,
   },
-  title: { color: "white", fontSize: 37, marginBottom: 10, fontWeight: "700" },
+  branchContainer: {
+    marginTop: 8,
+    alignItems: "center",
+    width: "100%",
+    paddingBottom: 8,
+  },
+  title: { color: "white", fontSize: 32, marginBottom: 8, fontWeight: "700", textAlign: "center" },
   subtitle: {
     color: "white",
     fontSize: 14,
-    marginBottom: 20,
-    width: "90%",
+    marginBottom: 16,
+    width: "100%",
+    maxWidth: 420,
     textAlign: "center",
     opacity: 0.9,
   },
-  fieldGroup: { width: "85%", marginBottom: 12 },
+  fieldGroup: { width: "100%", maxWidth: 420, marginBottom: 10 },
   label: { color: "rgba(255,255,255,0.95)", fontSize: 13, marginBottom: 6, fontWeight: "600" },
   input: {
     backgroundColor: "white",
@@ -357,13 +382,14 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: "white",
-    width: "85%",
+    width: "100%",
+    maxWidth: 420,
     height: 50,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 6,
+    marginBottom: 12,
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -372,17 +398,17 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: "#116C1B", fontSize: 17, fontWeight: "700" },
   logo: { width: 40, height: 50, resizeMode: "contain", marginTop: 8 },
-  branchTitle: { color: "white", fontSize: 26, textAlign: "center", marginBottom: 20 },
-  branchGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 15 },
+  branchTitle: { color: "white", fontSize: 24, textAlign: "center", marginBottom: 16 },
+  branchGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12 },
   branchCard: {
-    padding: 20,
+    padding: 16,
     borderRadius: 8,
-    minWidth: 140,
+    minWidth: 120,
     alignItems: "center",
     justifyContent: "center",
   },
-  branchCardText: { fontSize: 18, fontWeight: "600" },
-  footer: { flexDirection: "row", marginTop: 30, gap: 20 },
+  branchCardText: { fontSize: 16, fontWeight: "600" },
+  footer: { flexDirection: "row", marginTop: 20, gap: 16, flexWrap: "wrap", justifyContent: "center" },
   footerBtn: {
     flexDirection: "row",
     alignItems: "center",
