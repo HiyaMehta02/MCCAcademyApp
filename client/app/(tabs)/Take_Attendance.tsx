@@ -8,6 +8,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
 import { getApiBaseUrl } from "../../lib/apiBaseUrl";
+import {
+  AttendanceStatus,
+  fetchBatchAttendanceForDate,
+  setStudentAttendance,
+  todayDateString,
+} from "../../lib/attendance";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,6 +43,10 @@ export default function TakeAttendance() {
   const [search, setSearch] = useState('');
   const [fetching, setFetching] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [attendanceToday, setAttendanceToday] = useState<Record<string, AttendanceStatus>>({});
+  const [attendanceBusyId, setAttendanceBusyId] = useState<string | null>(null);
+
+  const sessionDate = todayDateString();
 
   // NEW: State to track which student is currently selected
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -52,8 +62,12 @@ export default function TakeAttendance() {
       if (!batchId) return;
       try {
         setFetching(true);
-        const rows = await fetchStudentsForBatch(batchId);
+        const [rows, attendanceMap] = await Promise.all([
+          fetchStudentsForBatch(batchId),
+          fetchBatchAttendanceForDate(batchId, sessionDate),
+        ]);
         setStudents(rows);
+        setAttendanceToday(attendanceMap);
       } catch (error) {
         console.error("Error fetching students:", error);
       } finally {
@@ -61,7 +75,7 @@ export default function TakeAttendance() {
       }
     }
     fetchStudents();
-  }, [batchId]);
+  }, [batchId, sessionDate]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -143,6 +157,10 @@ export default function TakeAttendance() {
       }
 
       if (response.ok) {
+        setAttendanceToday((prev) => ({
+          ...prev,
+          [selectedStudent.student_id]: "Present",
+        }));
         Alert.alert("Success", `Attendance marked for ${selectedStudent.students.first_name}`);
         setSelectedStudent(null);
       } else {
@@ -160,6 +178,22 @@ export default function TakeAttendance() {
       setIsLoading(false);
     }
   };
+
+  async function toggleManualAttendance(studentId: string) {
+    if (!batchId) return;
+    const current = attendanceToday[studentId];
+    const nextStatus: AttendanceStatus = current === "Present" ? "Absent" : "Present";
+
+    setAttendanceBusyId(studentId);
+    try {
+      await setStudentAttendance(studentId, batchId, sessionDate, nextStatus);
+      setAttendanceToday((prev) => ({ ...prev, [studentId]: nextStatus }));
+    } catch (err: any) {
+      Alert.alert("Error", err?.message ?? "Failed to update attendance.");
+    } finally {
+      setAttendanceBusyId(null);
+    }
+  }
 
   const filteredStudents = students.filter(s => 
     `${s.students?.first_name} ${s.students?.last_name}`.toLowerCase().includes(search.toLowerCase())
@@ -233,23 +267,41 @@ export default function TakeAttendance() {
             keyExtractor={(item) => item.student_id}
             renderItem={({ item }) => {
               const isSelected = selectedStudent?.student_id === item.student_id;
+              const status = attendanceToday[item.student_id];
+              const isPresent = status === "Present";
+              const isBusy = attendanceBusyId === item.student_id;
+
               return (
-                <TouchableOpacity 
-                  style={[styles.card, isSelected && styles.selectedCard]} 
+                <TouchableOpacity
+                  style={[styles.card, isSelected && styles.selectedCard]}
                   onPress={() => setSelectedStudent(item)}
+                  activeOpacity={0.85}
                 >
-                  <Image 
-                    source={require("../../images/student_image.jpg")} 
+                  <Image
+                    source={require("../../images/student_image.jpg")}
                     style={styles.studentImage}
                   />
-                  <View style={[styles.nameLabel, isSelected && { backgroundColor: '#4CAF50' }]}>
-                    <Text style={[styles.nameText, isSelected && { color: 'white' }]} numberOfLines={1}>
+                  <View style={styles.nameLabel}>
+                    <Text style={styles.nameText} numberOfLines={1}>
                       {item.students?.first_name}
                     </Text>
-                    <View style={styles.statusButtons}>
-                      <View style={styles.statusDotRed} />
-                      <View style={styles.statusDotGreen} />
-                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.attendanceBtn,
+                        isPresent ? styles.attendanceBtnAbsent : styles.attendanceBtnHere,
+                      ]}
+                      onPress={() => toggleManualAttendance(item.student_id)}
+                      disabled={isBusy}
+                      activeOpacity={0.8}
+                    >
+                      {isBusy ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Text style={styles.attendanceBtnText}>
+                          {isPresent ? "Mark as absent" : "Mark as here"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               );
@@ -364,7 +416,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.3,
+    height: CARD_WIDTH * 1.45,
     margin: CARD_MARGIN,
     backgroundColor: '#333',
     borderRadius: 15,
@@ -382,21 +434,37 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   nameLabel: {
-    backgroundColor: '#e0e0e0', 
-    paddingVertical: 6,
+    backgroundColor: '#2a2a2a',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
   },
   nameText: {
-    color: '#1c1c1c',
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  attendanceBtn: {
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  attendanceBtnHere: {
+    backgroundColor: '#116C1B',
+  },
+  attendanceBtnAbsent: {
+    backgroundColor: '#BD1F14',
+  },
+  attendanceBtnText: {
+    color: 'white',
     fontSize: 11,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  statusButtons: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 2
-  },
-  statusDotRed: { width: 14, height: 7, backgroundColor: '#8B2323', borderRadius: 2 },
-  statusDotGreen: { width: 14, height: 7, backgroundColor: '#116C1B', borderRadius: 2 },
   permissionText: { color: 'white', textAlign: 'center', marginTop: 100 }
 });

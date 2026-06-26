@@ -28,8 +28,14 @@ const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 5;
 const CARD_WIDTH = (width - 200) / COLUMN_COUNT;
 
-const StudentCard = ({ name }: { name: string }) => (
-  <View style={styles.card}>
+const StudentCard = ({
+  name,
+  onPress,
+}: {
+  name: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
     <Image 
       source={require("../../images/student_image.jpg")} 
       style={styles.studentImage}
@@ -37,12 +43,13 @@ const StudentCard = ({ name }: { name: string }) => (
     <View style={styles.nameLabel}>
       <Text style={styles.nameText}>{name}</Text>
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
 export default function StudentDirectory() {
-  const { batch_id, batch_name } = useLocalSearchParams();
+  const { batch_id, batch_name, branch_id, branch_name } = useLocalSearchParams();
   const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
+  const branchId = Array.isArray(branch_id) ? branch_id[0] : branch_id;
   const [search, setSearch] = useState('');
   
   const [students, setStudents] = useState<Student[]>([]);
@@ -111,6 +118,24 @@ export default function StudentDirectory() {
           </TouchableOpacity>
           
           <TouchableOpacity 
+            style={styles.registerBtn}
+            onPress={() => {
+              router.push({
+                pathname: "/Register_Student",
+                params: {
+                  batch_id: batchId,
+                  batch_name: batch_name,
+                  branch_id: branchId ?? "",
+                  branch_name: branch_name ?? "",
+                },
+              });
+            }}
+          >
+            <Ionicons name="person-add-outline" size={22} color="white" />
+            <Text style={styles.registerBtnText}>Register student</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             style={styles.initBtn}
             onPress={() => {
                   router.push({
@@ -137,7 +162,19 @@ export default function StudentDirectory() {
             numColumns={COLUMN_COUNT}
             keyExtractor={(item) => item.student_id}
             renderItem={({ item }) => (
-              <StudentCard name={`${item.students.first_name} ${item.students.last_name}`} />
+              <StudentCard
+                name={`${item.students.first_name} ${item.students.last_name}`}
+                onPress={() =>
+                  router.push({
+                    pathname: "/Student_Profile",
+                    params: {
+                      student_id: item.student_id,
+                      batch_id: batchId,
+                      batch_name: batch_name,
+                    },
+                  })
+                }
+              />
             )}
             contentContainerStyle={styles.listContent}
           />
@@ -221,6 +258,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  registerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#116C1B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  registerBtnText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '500',
   },
   initBtnText: {
     color: 'white',

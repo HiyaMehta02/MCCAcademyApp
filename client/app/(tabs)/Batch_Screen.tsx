@@ -33,19 +33,24 @@ function normalizeTime(t: string | null | undefined): string {
   return s.length >= 5 ? s.slice(0, 5) : s;
 }
 
-const BatchRow: React.FC<{ batch: Batch }> = ({ batch }) => {
+const BatchRow: React.FC<{ batch: Batch; branchId?: string; branchName?: string }> = ({
+  batch,
+  branchId,
+  branchName,
+}) => {
   return (
   <TouchableOpacity 
         style={styles.row} 
         activeOpacity={0.7}
         onPress={() => {
           console.log("Opening directory for batch:", batch.batch_id);
-          // Navigate to your new directory page
           router.push({
             pathname: '/Batch', 
             params: { 
               batch_id: batch.batch_id, 
-              batch_name: batch.batch_name 
+              batch_name: batch.batch_name,
+              branch_id: branchId ?? '',
+              branch_name: branchName ?? '',
             }
           });
         }}
@@ -77,6 +82,7 @@ const BatchRow: React.FC<{ batch: Batch }> = ({ batch }) => {
 export default function Batch_Screen() {
   const { branch_id, branch_name } = useLocalSearchParams();
   const branchId = Array.isArray(branch_id) ? branch_id[0] : branch_id;
+  const branchName = Array.isArray(branch_name) ? branch_name[0] : branch_name;
   const [searchTerm, setSearchTerm] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +177,12 @@ export default function Batch_Screen() {
         ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
             {filteredBatches.map((batch) => (
-              <BatchRow key={batch.batch_id} batch={batch} />
+              <BatchRow
+                key={batch.batch_id}
+                batch={batch}
+                branchId={branchId}
+                branchName={branchName}
+              />
             ))}
             {filteredBatches.length === 0 && (
                <Text style={{color: 'white', textAlign: 'center', marginTop: 20}}>No batches found.</Text>
@@ -180,6 +191,21 @@ export default function Batch_Screen() {
         )}
       </View>
       <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.footerBtn}
+          onPress={() =>
+            router.push({
+              pathname: "/Register_Student",
+              params: {
+                branch_id: branchId ?? "",
+                branch_name: branchName ?? "",
+              },
+            })
+          }
+        >
+          <Ionicons name="person-add-outline" size={20} color="white" />
+          <Text style={styles.footerBtnText}>Register student</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.footerBtn} onPress={() => router.push("/Coach_Requests")}>
           <Ionicons name="shield-checkmark-outline" size={20} color="white" />
           <Text style={styles.footerBtnText}>Coach Requests</Text>
