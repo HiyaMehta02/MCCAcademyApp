@@ -1,5 +1,5 @@
+import { getCoachAuthHeaders } from "./apiAuth";
 import { getApiBaseUrl } from "./apiBaseUrl";
-import { supabase } from "./supabase";
 import { loginIdToAuthEmail, normalizeLoginId } from "./coachAuth";
 
 export type CreateCoachPayload = {
@@ -16,16 +16,6 @@ export type CreateCoachResult = {
   coach_id?: string;
 };
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error("Not signed in");
-  }
-  return { Authorization: `Bearer ${session.access_token}` };
-}
-
 export async function createCoachAccount(payload: CreateCoachPayload): Promise<CreateCoachResult> {
   const base = getApiBaseUrl();
   if (!base) {
@@ -39,7 +29,7 @@ export async function createCoachAccount(payload: CreateCoachPayload): Promise<C
   form.append("temp_password", payload.temp_password);
   form.append("is_admin", payload.is_admin ? "true" : "false");
 
-  const headers = await authHeaders();
+  const headers = await getCoachAuthHeaders();
   const response = await fetch(`${base}/admin/coaches`, {
     method: "POST",
     headers,
@@ -71,7 +61,7 @@ export async function resetCoachPassword(loginId: string, tempPassword: string):
   const form = new FormData();
   form.append("temp_password", tempPassword);
 
-  const headers = await authHeaders();
+  const headers = await getCoachAuthHeaders();
   const response = await fetch(`${base}/admin/coaches/${encodeURIComponent(id)}/reset-password`, {
     method: "POST",
     headers,

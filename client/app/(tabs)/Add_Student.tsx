@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
 import { getApiBaseUrl } from "../../lib/apiBaseUrl";
+import { getCoachAuthHeaders } from "../../lib/apiAuth";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -113,12 +114,21 @@ export default function AddStudent() {
         type: 'image/jpeg',
         } as any);
 
+        let authHeaders: Record<string, string>;
+        try {
+          authHeaders = await getCoachAuthHeaders();
+        } catch {
+          Alert.alert("Not signed in", "Please log in again to enroll faces.");
+          return;
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120_000);
         let response: Response;
         try {
           response = await fetch(`${SERVER_URL}/enroll`, {
             method: 'POST',
+            headers: authHeaders,
             body: formData,
             signal: controller.signal,
           });

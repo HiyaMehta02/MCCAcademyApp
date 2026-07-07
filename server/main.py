@@ -49,28 +49,52 @@ def _validate_login_id(login_id: str) -> str | None:
     return None
 
 
-async def _require_admin(authorization: str | None) -> None:
+def _bearer_token(authorization: str | None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header.")
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header.")
+    return token
+
+
+def _supabase_user_headers(token: str) -> dict[str, str]:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Server missing SUPABASE_URL or SUPABASE_ANON_KEY for admin verification.",
+            detail="Server missing SUPABASE_URL or SUPABASE_ANON_KEY for session verification.",
         )
-    token = authorization.split(" ", 1)[1].strip()
+    return {
+        "Authorization": f"Bearer {token}",
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+    }
+
+
+async def _rpc_returns_true(token: str, rpc_name: str) -> bool:
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/is_current_user_admin",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "apikey": SUPABASE_ANON_KEY,
-                "Content-Type": "application/json",
-            },
+            f"{SUPABASE_URL}/rest/v1/rpc/{rpc_name}",
+            headers=_supabase_user_headers(token),
             json={},
         )
     if response.status_code >= 400:
         raise HTTPException(status_code=401, detail="Invalid or expired session.")
-    if not response.json():
+    return bool(response.json())
+
+
+async def _require_coach(authorization: str | None) -> None:
+    token = _bearer_token(authorization)
+    if await _rpc_returns_true(token, "has_coach_access"):
+        return
+    if await _rpc_returns_true(token, "is_current_user_admin"):
+        return
+    raise HTTPException(status_code=403, detail="Coach access required.")
+
+
+async def _require_admin(authorization: str | None) -> None:
+    token = _bearer_token(authorization)
+    if not await _rpc_returns_true(token, "is_current_user_admin"):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
 
@@ -214,9 +238,11 @@ async def _extract_face_embedding(file: UploadFile) -> list[float] | JSONRespons
 
 @app.post("/enroll")
 async def enroll_player(
+    authorization: str = Header(...),
     student_id: str = Form(...),
     file: UploadFile = File(...),
 ):
+    await _require_coach(authorization)
     await file.seek(0)
     raw_bytes = await file.read()
     saved = _save_debug_enroll_image(student_id, raw_bytes, file.filename)
@@ -249,10 +275,12 @@ async def enroll_player(
 
 @app.post("/check-attendance")
 async def check_attendance(
+    authorization: str = Header(...),
     student_id: str = Form(...),
     batch_id: str = Form(...),
     file: UploadFile = File(...),
 ):
+    await _require_coach(authorization)
     embedding = await _extract_face_embedding(file)
     if isinstance(embedding, JSONResponse):
         return embedding
@@ -420,7 +448,8 @@ async def admin_reset_coach_password(
 
 
 @app.get("/branches")
-async def get_branches():
+async def get_branches(authorization: str = Header(...)):
+    await _require_coach(authorization)
     response = supabase.table("branches").select("branch_id, branch_name").execute()
 
     print(f"Sending to App: {response.data}")
@@ -429,7 +458,8 @@ async def get_branches():
 
 
 @app.get("/batches/{branch_id}")
-async def get_batches(branch_id: str):
+async def get_batches(branch_id: str, authorization: str = Header(...)):
+    await _require_coach(authorization)
     response = (
         supabase.table("batches")
         .select("batch_id, batch_name, batch_schedule(day_of_week, start_time, end_time)")
@@ -441,7 +471,8 @@ async def get_batches(branch_id: str):
 
 
 @app.get("/students/{batch_id}")
-async def get_students_by_batch(batch_id: str):
+async def get_students_by_batch(batch_id: str, authorization: str = Header(...)):
+    await _require_coach(authorization)
     response = (
         supabase.table("batch_members")
         .select("student_id, students(first_name, last_name, status, parent_phone)")
