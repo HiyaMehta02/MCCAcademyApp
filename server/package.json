@@ -16,5 +16,8 @@
     "express": "^5.1.0",
     "firebase-admin": "^13.4.0",
     "mysql2": "^3.14.4"
+  },
+  "overrides": {
+    "protobufjs": ">=7.6.3"
   }
 }

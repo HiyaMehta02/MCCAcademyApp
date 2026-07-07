@@ -1,62 +1,79 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  StyleSheet, Text, View, ActivityIndicator, Alert, TextInput, 
-  TouchableOpacity, FlatList, Image, Dimensions, Animated, PanResponder, Button 
-} from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
-import { getApiBaseUrl } from "../../lib/apiBaseUrl";
-import { getCoachAuthHeaders } from "../../lib/apiAuth";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  Animated,
+  PanResponder,
+  Button,
+} from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import { fetchStudentsForBatch } from "../lib/dataFromSupabase";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
+import { getCoachAuthHeaders } from "../lib/apiAuth";
 import {
   AttendanceStatus,
   fetchBatchAttendanceForDate,
   setStudentAttendance,
   todayDateString,
-} from "../../lib/attendance";
-
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const COLUMN_COUNT = 4;
-const CARD_MARGIN = 8;
-const GRID_PADDING = 20;
-const CARD_WIDTH = (SCREEN_WIDTH - (GRID_PADDING * 2) - (CARD_MARGIN * COLUMN_COUNT * 2)) / COLUMN_COUNT;
+} from "../lib/attendance";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsiveLayout } from "../lib/useResponsiveLayout";
 
 interface Student {
-  student_id: string; 
+  student_id: string;
   students: {
     first_name: string;
     last_name: string;
-    status: string; 
+    status: string;
   };
 }
 
 export default function TakeAttendance() {
+  const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const { batch_id } = useLocalSearchParams();
   const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
   const router = useRouter();
-  
+
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
 
   const [students, setStudents] = useState<Student[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [fetching, setFetching] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [attendanceToday, setAttendanceToday] = useState<Record<string, AttendanceStatus>>({});
   const [attendanceBusyId, setAttendanceBusyId] = useState<string | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   const sessionDate = todayDateString();
 
-  // NEW: State to track which student is currently selected
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const screenHeight = layout.height;
+  const screenWidth = layout.width;
+  const gridPadding = layout.isTablet ? 20 : 16;
+  const numColumns = layout.attendanceGridColumns;
+  const cardWidth = layout.attendanceCardWidth;
+  const cardMargin = layout.cardMargin;
 
-  const START_HEIGHT = SCREEN_HEIGHT * 0.75; 
-  const OPEN_HEIGHT = SCREEN_HEIGHT * 0.20; 
+  const START_HEIGHT = screenHeight * 0.75;
+  const OPEN_HEIGHT = screenHeight * 0.2;
 
   const translateY = useRef(new Animated.Value(START_HEIGHT)).current;
   const lastScrollY = useRef(START_HEIGHT);
+
+  useEffect(() => {
+    translateY.setValue(START_HEIGHT);
+    lastScrollY.current = START_HEIGHT;
+  }, [START_HEIGHT, translateY]);
 
   useEffect(() => {
     async function fetchStudents() {
@@ -78,28 +95,29 @@ export default function TakeAttendance() {
     fetchStudents();
   }, [batchId, sessionDate]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (evt, gestureState) => Math.abs(gestureState.dy) > 5,
-      onPanResponderMove: (e, gestureState) => {
-        const newValue = lastScrollY.current + gestureState.dy;
-        if (newValue > OPEN_HEIGHT && newValue < SCREEN_HEIGHT * 0.95) {
-          translateY.setValue(newValue);
-        }
-      },
-      onPanResponderRelease: (e, gestureState) => {
-        if (gestureState.dy < -50) { 
-          Animated.spring(translateY, { toValue: OPEN_HEIGHT, useNativeDriver: true }).start();
-          lastScrollY.current = OPEN_HEIGHT;
-        } else { 
-          Animated.spring(translateY, { toValue: START_HEIGHT, useNativeDriver: true }).start();
-          lastScrollY.current = START_HEIGHT;
-        }
-      },
-    })
-  ).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_evt, gestureState) => Math.abs(gestureState.dy) > 5,
+        onPanResponderMove: (_e, gestureState) => {
+          const newValue = lastScrollY.current + gestureState.dy;
+          if (newValue > OPEN_HEIGHT && newValue < screenHeight * 0.95) {
+            translateY.setValue(newValue);
+          }
+        },
+        onPanResponderRelease: (_e, gestureState) => {
+          if (gestureState.dy < -50) {
+            Animated.spring(translateY, { toValue: OPEN_HEIGHT, useNativeDriver: true }).start();
+            lastScrollY.current = OPEN_HEIGHT;
+          } else {
+            Animated.spring(translateY, { toValue: START_HEIGHT, useNativeDriver: true }).start();
+            lastScrollY.current = START_HEIGHT;
+          }
+        },
+      }),
+    [OPEN_HEIGHT, START_HEIGHT, screenHeight, translateY]
+  );
 
-  // Face verification + DB write via backend (same as original app)
   const handleAttendance = async () => {
     if (!selectedStudent) {
       Alert.alert("No Selection", "Please select a student from the list first.");
@@ -205,9 +223,13 @@ export default function TakeAttendance() {
     }
   }
 
-  const filteredStudents = students.filter(s => 
+  const filteredStudents = students.filter((s) =>
     `${s.students?.first_name} ${s.students?.last_name}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  const headerInset = layout.isTablet ? 40 : 16;
+  const headerTop = layout.isTablet ? 50 : insets.top + 8;
+  const cardHeight = cardWidth * (layout.isPhone ? 1.55 : 1.45);
 
   if (!permission?.granted) {
     return (
@@ -222,37 +244,45 @@ export default function TakeAttendance() {
     <View style={styles.container}>
       <CameraView style={styles.camera} facing="front" ref={cameraRef} />
 
-      {/* Top Header */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+      <View style={[styles.topHeader, { top: headerTop, left: headerInset, right: headerInset }]}>
+        <TouchableOpacity style={[styles.backBtn, layout.isPhone && styles.backBtnPhone]} onPress={() => router.back()}>
           <Ionicons name="arrow-undo-sharp" size={18} color="white" />
-          <Text style={styles.backBtnText}>Back</Text>
+          {!layout.isPhone && <Text style={styles.backBtnText}>Back</Text>}
         </TouchableOpacity>
-        
-        {/* NEW: Display who is being scanned */}
+
         {selectedStudent && (
-          <View style={styles.activeLabel}>
-            <Text style={styles.activeText}>Scanning: {selectedStudent.students.first_name}</Text>
+          <View style={[styles.activeLabel, layout.isPhone && styles.activeLabelPhone]}>
+            <Text style={styles.activeText} numberOfLines={1}>
+              {layout.isPhone ? selectedStudent.students.first_name : `Scanning: ${selectedStudent.students.first_name}`}
+            </Text>
           </View>
         )}
 
-        <View style={styles.cameraTriggerContainer}>
-            <TouchableOpacity 
-              style={[styles.captureCircle, isLoading && { opacity: 0.5 }]} 
-              onPress={handleAttendance}
-              disabled={isLoading}
-            >
-                {isLoading ? <ActivityIndicator color="black" /> : <View style={styles.captureInner} />}
-            </TouchableOpacity>
+        <View style={[styles.cameraTriggerContainer, layout.isPhone && styles.cameraTriggerPhone]}>
+          <TouchableOpacity
+            style={[styles.captureCircle, layout.isPhone && styles.captureCirclePhone, isLoading && { opacity: 0.5 }]}
+            onPress={handleAttendance}
+            disabled={isLoading}
+          >
+            {isLoading ? <ActivityIndicator color="black" /> : <View style={styles.captureInner} />}
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.faceHint} pointerEvents="none">
+      <View style={[styles.faceHint, { bottom: screenHeight * 0.27 }]} pointerEvents="none">
         <Text style={styles.faceHintText}>Only one face should be visible in the frame.</Text>
       </View>
 
-      <Animated.View 
-        style={[styles.bottomSheet, { transform: [{ translateY: translateY }] }]}
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          {
+            width: screenWidth,
+            height: screenHeight,
+            paddingHorizontal: gridPadding,
+            transform: [{ translateY }],
+          },
+        ]}
       >
         <View {...panResponder.panHandlers} style={styles.dragArea}>
           <View style={styles.handle} />
@@ -260,7 +290,7 @@ export default function TakeAttendance() {
             <Feather name="search" size={20} color="#666" style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder={`Search Students...`}
+              placeholder="Search Students..."
               placeholderTextColor="#999"
               value={search}
               onChangeText={setSearch}
@@ -272,8 +302,9 @@ export default function TakeAttendance() {
           <ActivityIndicator size="large" color="#116C1B" style={{ marginTop: 20 }} />
         ) : (
           <FlatList
+            key={`attendance-grid-${numColumns}`}
             data={filteredStudents}
-            numColumns={COLUMN_COUNT}
+            numColumns={numColumns}
             keyExtractor={(item) => item.student_id}
             renderItem={({ item }) => {
               const isSelected = selectedStudent?.student_id === item.student_id;
@@ -283,14 +314,15 @@ export default function TakeAttendance() {
 
               return (
                 <TouchableOpacity
-                  style={[styles.card, isSelected && styles.selectedCard]}
+                  style={[
+                    styles.card,
+                    { width: cardWidth, height: cardHeight, margin: cardMargin },
+                    isSelected && styles.selectedCard,
+                  ]}
                   onPress={() => setSelectedStudent(item)}
                   activeOpacity={0.85}
                 >
-                  <Image
-                    source={require("../../images/student_image.jpg")}
-                    style={styles.studentImage}
-                  />
+                  <Image source={require("../images/student_image.jpg")} style={styles.studentImage} />
                   <View style={styles.nameLabel}>
                     <Text style={styles.nameText} numberOfLines={1}>
                       {item.students?.first_name}
@@ -325,156 +357,126 @@ export default function TakeAttendance() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: "#000" },
   camera: { flex: 1 },
   topHeader: {
-    position: 'absolute',
-    top: 50,
-    left: 40,
-    right: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 10
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    zIndex: 10,
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4d1212',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#4d1212",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
-    gap: 10
+    gap: 10,
   },
-  backBtnText: { color: 'white', fontSize: 16 },
+  backBtnPhone: { paddingHorizontal: 12, paddingVertical: 10 },
+  backBtnText: { color: "white", fontSize: 16 },
   activeLabel: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    flex: 1,
+    marginHorizontal: 8,
+    backgroundColor: "rgba(0,0,0,0.7)",
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#4CAF50'
+    borderColor: "#4CAF50",
   },
-  activeText: { color: '#4CAF50', fontWeight: 'bold' },
+  activeLabelPhone: { flex: 0, maxWidth: 120, paddingHorizontal: 10 },
+  activeText: { color: "#4CAF50", fontWeight: "bold", fontSize: 13 },
   faceHint: {
-    position: 'absolute',
-    bottom: SCREEN_HEIGHT * 0.27,
+    position: "absolute",
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: "rgba(0,0,0,0.55)",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     zIndex: 5,
   },
-  faceHintText: { color: '#eee', fontSize: 12, textAlign: 'center' },
+  faceHintText: { color: "#eee", fontSize: 12, textAlign: "center" },
   cameraTriggerContainer: {
     width: 65,
     height: 65,
     borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
+  cameraTriggerPhone: { width: 52, height: 52, borderRadius: 26 },
   captureCircle: {
     width: 55,
     height: 55,
     borderRadius: 30,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center'
+    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
   },
+  captureCirclePhone: { width: 44, height: 44, borderRadius: 22 },
   captureInner: {
     width: 48,
     height: 48,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
   },
   bottomSheet: {
-    position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: '#1c1c1c',
+    position: "absolute",
+    backgroundColor: "#1c1c1c",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    paddingHorizontal: GRID_PADDING,
   },
-  dragArea: {
-    alignItems: 'center',
-    paddingVertical: 15,
-  },
+  dragArea: { alignItems: "center", paddingVertical: 15 },
   handle: {
     width: 40,
     height: 5,
-    backgroundColor: '#444',
+    backgroundColor: "#444",
     borderRadius: 3,
-    marginBottom: 15
+    marginBottom: 15,
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
     borderRadius: 20,
     paddingHorizontal: 15,
-    width: '90%',
+    width: "90%",
     height: 40,
   },
-  searchInput: { flex: 1, color: 'black', fontSize: 14 },
-  listContent: {
-    paddingBottom: 250,
-  },
+  searchInput: { flex: 1, color: "black", fontSize: 14 },
+  listContent: { paddingBottom: 250 },
   card: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.45,
-    margin: CARD_MARGIN,
-    backgroundColor: '#333',
+    backgroundColor: "#333",
     borderRadius: 15,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 2,
-    borderColor: 'transparent'
+    borderColor: "transparent",
   },
-  selectedCard: {
-    borderColor: '#4CAF50',
-  },
-  studentImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
+  selectedCard: { borderColor: "#4CAF50" },
+  studentImage: { flex: 1, width: "100%", height: "100%", resizeMode: "cover" },
   nameLabel: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: "#2a2a2a",
     paddingVertical: 8,
     paddingHorizontal: 6,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  nameText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
+  nameText: { color: "white", fontSize: 12, fontWeight: "600", marginBottom: 6 },
   attendanceBtn: {
-    width: '100%',
+    width: "100%",
     paddingVertical: 10,
     paddingHorizontal: 4,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 36,
   },
-  attendanceBtnHere: {
-    backgroundColor: '#116C1B',
-  },
-  attendanceBtnAbsent: {
-    backgroundColor: '#BD1F14',
-  },
-  attendanceBtnText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  permissionText: { color: 'white', textAlign: 'center', marginTop: 100 }
+  attendanceBtnHere: { backgroundColor: "#116C1B" },
+  attendanceBtnAbsent: { backgroundColor: "#BD1F14" },
+  attendanceBtnText: { color: "white", fontSize: 11, fontWeight: "700", textAlign: "center" },
+  permissionText: { color: "white", textAlign: "center", marginTop: 100 },
 });

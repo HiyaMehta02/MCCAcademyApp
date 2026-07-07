@@ -24,7 +24,9 @@ export default ({ config }) => {
         foregroundImage: './assets/images/appIcon.png',
         backgroundColor: '#ffffff'
       },
-      edgeToEdgeEnabled: true
+      edgeToEdgeEnabled: true,
+      // Allow http:// to your LAN API (port 8000) during development
+      usesCleartextTraffic: true,
     },
     plugins: [
       'expo-router',

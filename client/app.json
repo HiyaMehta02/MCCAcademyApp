@@ -1,21 +1,29 @@
 {
   "expo": {
-    "name": "client",
+    "name": "MCC Academy",
     "slug": "mccc-academy-app",
     "version": "1.0.0",
-    "orientation": "landscape",
+    "orientation": "horizontal",
     "icon": "./assets/images/appIcon.png",
-    "scheme": "client",
+    "scheme": "mccc-academy-app",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hiyam.mcccacademyapp",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.1072358424256-393lhnsrg48md165if5c95b3ta46qmt2"
+            ]
+          }
+        ]
       }
     },
     "android": {
+      "package": "com.hiyam.mcccacademyapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/appIcon.png",
         "backgroundColor": "#ffffff"
@@ -38,8 +46,6 @@
       "typedRoutes": true
     },
     "extra": {
-      "IP_ADDRESS": "192.168.x.x", 
-      "router": {},
       "eas": {
         "projectId": "9e355a03-62f7-4fa2-8406-ac578752d761"
       }
