@@ -16,17 +16,17 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
-import { getApiBaseUrl } from "../../lib/apiBaseUrl";
-import { getCoachAuthHeaders } from "../../lib/apiAuth";
+import { fetchStudentsForBatch } from "../lib/dataFromSupabase";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
+import { getCoachAuthHeaders } from "../lib/apiAuth";
 import {
   AttendanceStatus,
   fetchBatchAttendanceForDate,
   setStudentAttendance,
   todayDateString,
-} from "../../lib/attendance";
+} from "../lib/attendance";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../lib/useResponsiveLayout";
 
 interface Student {
   student_id: string;
@@ -322,7 +322,7 @@ export default function TakeAttendance() {
                   onPress={() => setSelectedStudent(item)}
                   activeOpacity={0.85}
                 >
-                  <Image source={require("../../images/student_image.jpg")} style={styles.studentImage} />
+                  <Image source={require("../images/student_image.jpg")} style={styles.studentImage} />
                   <View style={styles.nameLabel}>
                     <Text style={styles.nameText} numberOfLines={1}>
                       {item.students?.first_name}

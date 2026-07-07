@@ -11,7 +11,7 @@ import {
   ActivityIndicator 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router'; // Added useLocalSearchParams
 import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
 

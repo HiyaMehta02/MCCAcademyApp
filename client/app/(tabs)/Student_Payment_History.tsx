@@ -16,8 +16,6 @@ import {
   fetchStudentPayments,
 } from "../../lib/studentProfile";
 
-const PREVIEW_LIMIT = 5;
-
 function formatOmr(amount: number): string {
   return `${Number(amount).toFixed(2)} OMR`;
 }

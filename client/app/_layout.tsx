@@ -15,6 +15,15 @@ type GateState = {
   accessStatus: "approved" | "pending" | "rejected" | "suspended" | "none";
 };
 
+const AUTH_ONLY_PREFIXES = [
+  "/login",
+  "/set-password",
+  "/no-access",
+  "/pending",
+  "/rejected",
+  "/suspended",
+];
+
 async function getAccessStatus(): Promise<Pick<GateState, "accessStatus" | "mustSetPassword">> {
   const { data: coachStatus } = await supabase.rpc("current_coach_status");
   const status =
@@ -85,15 +94,6 @@ export default function Layout() {
       authListener.subscription.unsubscribe();
     };
   }, []);
-
-  const AUTH_ONLY_PREFIXES = [
-    "/login",
-    "/set-password",
-    "/no-access",
-    "/pending",
-    "/rejected",
-    "/suspended",
-  ];
 
   useEffect(() => {
     if (gate.loading) return;

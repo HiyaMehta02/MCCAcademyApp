@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import base64
 import io
 import json
@@ -308,14 +308,18 @@ async def check_attendance(
         )
 
     try:
-        supabase.table("attendance").insert(
+        supabase.table("attendance").upsert(
             {
                 "student_id": match["student_id"],
                 "batch_id": batch_id,
+                "date": date.today().isoformat(),
                 "status": "Present",
-            }
+            },
+            on_conflict="student_id,batch_id,date",
         ).execute()
     except APIError as exc:
+        if getattr(exc, "code", None) == "23505":
+            return {"message": "Attendance already recorded for today."}
         return _handle_api_error(exc, "Recording attendance")
 
     return {"message": "Attendance logged successfully."}

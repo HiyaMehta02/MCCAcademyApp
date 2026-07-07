@@ -27,7 +27,7 @@ interface Student {
 }
 
 export default function AddStudent() {
-  const { batch_id, batch_name } = useLocalSearchParams();
+  const { batch_id } = useLocalSearchParams();
   const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
   const router = useRouter();
   

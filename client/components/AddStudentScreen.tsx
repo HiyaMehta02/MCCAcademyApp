@@ -16,11 +16,11 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
-import { getApiBaseUrl } from "../../lib/apiBaseUrl";
-import { getCoachAuthHeaders } from "../../lib/apiAuth";
+import { fetchStudentsForBatch } from "../lib/dataFromSupabase";
+import { getApiBaseUrl } from "../lib/apiBaseUrl";
+import { getCoachAuthHeaders } from "../lib/apiAuth";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../lib/useResponsiveLayout";
 
 interface Student {
   student_id: string;
@@ -284,7 +284,7 @@ export default function AddStudent() {
                   ]}
                   onPress={() => setSelectedStudent(item)}
                 >
-                  <Image source={require("../../images/student_image.jpg")} style={styles.studentImage} />
+                  <Image source={require("../images/student_image.jpg")} style={styles.studentImage} />
                   <View style={[styles.nameLabel, isSelected && { backgroundColor: "#4CAF50" }]}>
                     <Text style={[styles.nameText, isSelected && { color: "white" }]} numberOfLines={1}>
                       {item.students?.first_name}

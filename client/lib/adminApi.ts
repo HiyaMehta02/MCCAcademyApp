@@ -37,7 +37,7 @@ export async function createCoachAccount(payload: CreateCoachPayload): Promise<C
   });
 
   const text = await response.text();
-  let body: CreateCoachResult & { error?: string; details?: string } = {};
+  let body: Partial<CreateCoachResult> & { error?: string; details?: string; message?: string } = {};
   try {
     body = text ? JSON.parse(text) : {};
   } catch {
