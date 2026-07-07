@@ -117,3 +117,89 @@ curl -X POST https://YOUR_STAGING_API/enroll \
 ## Contacts / escalation
 
 _(Optional: who owns prod access, who can rotate secrets.)_
+
+---
+
+## RLS Security Advisor
+
+**Last reviewed:** 2026-07-07  
+**Export:** `supabase-warning.csv` (26 warnings, 0 errors)  
+**Remediation migration:** `supabase/migrations/20260707120000_security_advisor_sprint0.sql`
+
+### Summary by group
+
+| Group | Count | Priority | Action |
+|-------|------:|----------|--------|
+| **A — Fix immediately** | 3 types | High | Apply migration + enable leaked-password check |
+| **B — Fixed by migration (RPC grants)** | 22 rows | High | Same migration; re-run advisor |
+| **C — Accept / defer** | 2 | Low | Document; fix before prod if needed |
+
+### A — Fix immediately
+
+#### 1. `admin_insert_coach` / `admin_set_coach_must_set_password` callable by anon (CRITICAL)
+
+Anyone with the anon key could create coaches if these stay public.
+
+**Fix:** Migration revokes `EXECUTE` from `anon` / `authenticated` / `PUBLIC`; grants `service_role` only. Coach creation stays on Face API `/admin/coaches` (admin JWT) and `bootstrap_admin_coach.py`.
+
+#### 2. `student-auth-photos` public bucket allows listing (CRITICAL)
+
+Policy `student_auth_photos_select` lets clients list **all** files in the bucket.
+
+**Fix:** Migration drops that policy. Known object URLs still work; directory listing does not.
+
+**Verify:** Supabase → Storage → `student-auth-photos` → Policies — no broad `SELECT` for `anon`.
+
+#### 3. Leaked password protection disabled
+
+**Fix (Dashboard, ~1 min):** Authentication → Providers → Email → enable **Leaked password protection** (HaveIBeenPwned).
+
+### B — Fixed by migration `20260707120000_security_advisor_sprint0.sql`
+
+| Lint | Functions / objects | What migration does |
+|------|---------------------|---------------------|
+| `function_search_path_mutable` | `match_face` | `SET search_path = public` |
+| `anon_security_definer_function_executable` | 11 functions | `REVOKE` from `anon` + `PUBLIC` |
+| `authenticated_security_definer_function_executable` | admin + trigger RPCs | Revoke from `authenticated` where not needed |
+
+**Coach RPCs kept for `authenticated` only** (app uses these):
+
+- `coach_must_set_password`, `clear_must_set_password`
+- `current_coach_id`, `current_coach_status`
+- `has_coach_access`, `is_current_user_admin`
+- `refresh_student_billing` (has internal coach guard)
+
+**Revoked from app roles** (trigger / server-only):
+
+- `coaches_set_updated_at`, `enforce_coach_admin_guard`
+- `admin_insert_coach`, `admin_set_coach_must_set_password`
+- `match_face` → `service_role` only
+
+### C — Accept / defer (documented)
+
+| Warning | Why defer | Revisit |
+|---------|-----------|---------|
+| `extension_in_public` (`vector`) | Standard pgvector setup; moving schemas is risky | Before prod hardening / Supabase upgrade |
+| `authenticated_security_definer_function_executable` on intentional coach RPCs | Linter flags any `SECURITY DEFINER` + `authenticated`; functions use `auth.uid()` or internal guards | Sprint 0.5 — consider `SECURITY INVOKER` where safe |
+
+### How to apply
+
+1. Supabase Dashboard → **SQL Editor** → paste/run  
+   `supabase/migrations/20260707120000_security_advisor_sprint0.sql`
+2. Enable leaked password protection (Dashboard).
+3. **Advisors → Security** → re-run; expect **~2–8 warnings** remaining (extension + residual DEFINER notices).
+4. Smoke-test app: login, set password, coach requests, fees refresh, enroll, attendance.
+
+### Post-migration expected warnings
+
+- `extension_in_public` (vector) — accepted until pgvector schema move
+- Some `authenticated_security_definer_function_executable` on coach helpers — accepted with guards documented above
+
+### Sprint 0 Task 11 — done when
+
+- [x] Advisor export saved (`supabase-warning.csv`)
+- [ ] Migration applied on dev project
+- [ ] Leaked password protection enabled
+- [ ] Critical items (admin RPCs, storage listing) resolved
+- [ ] App smoke-test passed after migration
+- [ ] Remaining warnings documented in this section
