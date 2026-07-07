@@ -3,15 +3,15 @@
 **🔗 Links:**
 * [GitHub Repository](https://github.com/HiyaMehta02/MCCAcademyApp)
 * [Figma Design & Prototypes](https://www.figma.com/design/1qdwx5CAK5xDp4qd2zrbPt/MCCC-APP?node-id=0-1&p=f&t=owy36VCPtUUc53Am-0)
-* [Supabase Database Dashboard](https://supabase.com/dashboard/project/fdnyfyvgohexlszuxwdv/editor/17412?schema=public)
+* [Supabase Database Dashboard](https://supabase.com/dashboard/project/wukmanrpnbfoyqtjdxjs)
 
 The MCCC Academy App is a dedicated mobile application designed for the Muscat Cricket Coaching Centre (MCCC). Built with a strong emphasis on intuitive UI/UX and user-centered design, the app serves as a centralized platform to connect coaches and players, streamlining scheduling, communication, and player development.
 
 ## 🚀 Tech Stack
 
-* **Frontend (Client):** Mobile application built with JavaScript/TypeScript, focusing on interactive and seamless navigation.
-* **Backend (Server):** Node.js-based backend environment for API and data handling.
-* **Database & Auth:** [Supabase](https://supabase.com/) for scalable database management.
+* **Frontend (Client):** Mobile application built with **React Native (Expo)** and JavaScript/TypeScript, focusing on interactive and seamless navigation.
+* **Backend (Server):** **Python-based FastAPI** environment for API handling and AI-driven Face Recognition.
+* **Database & Auth:** [Supabase](https://supabase.com/) for scalable database management and authentication.
 
 ## 🎨 UI/UX & Design Process
 
@@ -21,8 +21,8 @@ The initial phases of this project heavily involved wireframing and prototyping 
 
 The project is organized into two main directories:
 
-* **`/client`**: Contains the mobile application source code, UI components, and client-side logic.
-* **`/server`**: Contains the backend API, server-side business logic, and database configuration.
+* **`/client`**: Contains the mobile application source code (Expo), UI components, and client-side logic.
+* **`/server`**: Contains the FastAPI backend, Python logic, and **Virtual Environment (`venv`)** for dependency isolation.
 
 ## ⚙️ Environment Variables
 
@@ -48,11 +48,11 @@ Run **`scripts/check-face-api-network.ps1`** for a local checklist. Start the AP
 
 ### Server Environment Variables (`server/.env`)
 
-Create a `.env` file in the root of the `/server` folder. Add your necessary backend variables here:
+Create a `.env` file in the root of the `/server` folder:
 
 ```env
-SUPABASE_URL="api_url"
-SUPABASE_KEY="api_key"
+SUPABASE_URL="your_supabase_project_url"
+SUPABASE_KEY="your_supabase_anon_key"
 ```
 
 ## 🛠️ Getting Started
@@ -61,8 +61,9 @@ SUPABASE_KEY="api_key"
 
 Make sure you have the following installed on your local machine:
 
-* [Node.js](https://nodejs.org/) (v16 or higher recommended)
-* npm or yarn
+* [Node.js](https://nodejs.org/) (v18 or higher recommended)
+* [Python](https://www.python.org/) (v3.11 or v3.12 recommended)
+* **C++ Build Tools:** Required for the `face_recognition` library. (On Windows, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and select "Desktop development with C++")
 
 ### Installation
 
@@ -78,25 +79,32 @@ Make sure you have the following installed on your local machine:
    npm install
    ```
 
-3. **Install Server Dependencies:**
+3. **Install Server Dependencies (Python Venv):**
    ```bash
    cd ../server
-   npm install
+   # Create the virtual environment
+   python -m venv venv
+
+   # Activate the environment (Windows)
+   .\venv\Scripts\activate
+
+   # Install core dependencies
+   pip install -r requirements.txt
+
+   # Install the AI models directly from source
+   pip install git+[https://github.com/ageitgey/face_recognition_models](https://github.com/ageitgey/face_recognition_models)
    ```
 
 ### Running the Application Locally
 
 **Starting the Client:**
-To run the mobile application in your development environment:
-
 ```bash
 cd client
 npm start
 ```
 
 **Starting the Server:**
-To run your backend database file:
-
+*(Ensure your virtual environment `(venv)` is activated before running)*
 ```bash
 cd server
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
