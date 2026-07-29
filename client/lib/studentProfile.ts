@@ -7,8 +7,12 @@ export type StudentProfile = {
   student_id: string;
   first_name: string;
   last_name: string;
+  dob: string | null;
   parent_phone: string | null;
   gender: StudentGender;
+  clothes_size: string | null;
+  resident_card_front_path: string | null;
+  resident_card_back_path: string | null;
   is_sibling_discount_eligible: boolean;
   referral_discount_month: number | null;
   referral_discount_year: number | null;
@@ -62,6 +66,8 @@ export type AttendanceRecord = {
   attendance_id: string;
   date: string;
   status: string;
+  is_off_schedule: boolean;
+  is_cross_branch: boolean;
   batches: { batch_name: string } | null;
 };
 
@@ -78,8 +84,12 @@ export async function fetchStudentProfile(studentId: string): Promise<StudentPro
       student_id,
       first_name,
       last_name,
+      dob,
       parent_phone,
       gender,
+      clothes_size,
+      resident_card_front_path,
+      resident_card_back_path,
       is_sibling_discount_eligible,
       referral_discount_month,
       referral_discount_year,
@@ -180,6 +190,8 @@ export async function fetchStudentAttendance(
       attendance_id,
       date,
       status,
+      is_off_schedule,
+      is_cross_branch,
       batches ( batch_name )
     `
     )
@@ -196,6 +208,8 @@ export async function fetchStudentAttendance(
 
   return (data ?? []).map((row: any) => ({
     ...row,
+    is_off_schedule: Boolean(row.is_off_schedule),
+    is_cross_branch: Boolean(row.is_cross_branch),
     batches: Array.isArray(row.batches) ? row.batches[0] ?? null : row.batches,
   }));
 }

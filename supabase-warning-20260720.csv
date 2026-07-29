@@ -1,0 +1,5 @@
+name,title,level,detail,decision
+rls_enabled_no_policy,RLS Enabled No Policy,INFO,student_auth — intentional no client policies; service_role only,ACCEPT
+extension_in_public,Extension in Public,WARN,vector in public,ACCEPT
+authenticated_security_definer_function_executable,Signed-In Users Can Execute SECURITY DEFINER,WARN,coach helper RPCs,ACCEPT_WITH_GUARDS
+auth_leaked_password_protection,Leaked Password Protection Disabled,WARN,Enable in Auth dashboard,OPEN

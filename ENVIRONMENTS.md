@@ -1,19 +1,46 @@
 # MCCC Academy — Environments
 
-Living reference for **dev**, **staging**, and **production** separation.  
-Fill in real URLs and procedures as you complete Sprint 0 DevSecOps tasks.
+Living reference for **dev**, **staging**, and **production** separation.
+
+**Last updated:** 2026-07-07
+
+---
+
+## Supabase strategy (free tier)
+
+Supabase **free plan allows one active project**. This repo uses a **single shared database** for all phases until upgrade or launch:
+
+| Dashboard / plan | Value |
+|------------------|-------|
+| **Project ref** | `wukmanrpnbfoyqtjdxjs` |
+| **Project URL** | `https://wukmanrpnbfoyqtjdxjs.supabase.co` |
+| **Migrations** | All files in `supabase/migrations/` applied to this project (including `20260707120000_security_advisor_sprint0.sql`) |
+| **Admin bootstrap** | `server/scripts/bootstrap_admin_coach.py` run against this project |
+
+**What still separates environments**
+
+- **Face API host** — local LAN for dev; HTTPS host for staging/preview builds; separate prod host at launch.
+- **EAS build profiles** — `development` / `preview` / `production` with different `EXPO_PUBLIC_*` secrets.
+- **Server flags** — e.g. `DEBUG_ENROLL_IMAGES=1` locally, `0` on deployed hosts.
+
+**Deferred until paid plan or production launch**
+
+- Separate Supabase projects (`mccc-staging`, `mccc-prod`).
+- Wiping staging data without affecting production (requires a second project).
+
+At launch, create a **new prod project**, run all migrations, rotate keys, and point the `production` EAS profile at prod URLs only.
 
 ---
 
 ## Projects overview
 
-| Environment | Supabase project | Face API base URL | Mobile build (EAS) | Purpose |
-|-------------|------------------|-------------------|--------------------|---------|
-| **dev** | `mccc-dev` _(fill in)_ | `http://<LAN_IP>:8000` _(local)_ | `development` profile | Daily coach development |
-| **staging** | `mccc-staging` _(fill in)_ | `https://...` _(fill in)_ | `preview` profile | QA, demos, wipe/reseed |
-| **prod** | `mccc-prod` _(fill in)_ | `https://...` _(fill in)_ | `production` profile | Live academy data |
+| Environment | Supabase | Face API base URL | Mobile build (EAS) | Purpose |
+|-------------|----------|-------------------|--------------------|---------|
+| **dev** | Shared project `wukmanrpnbfoyqtjdxjs` | `http://<LAN_IP>:8000` (local) | `development` profile | Daily coach development |
+| **staging** | Same shared project | `https://<staging-api-host>` _(deploy pending)_ | `preview` profile | QA, preview builds; API on HTTPS host |
+| **prod** | New project at launch _(not created yet)_ | `https://<prod-api-host>` _(at launch)_ | `production` profile | Live academy data |
 
-**Rule:** Staging must be wipeable without affecting production. Never point a staging build at prod Supabase or prod API.
+**Rule (current free tier):** Treat the shared project as **production data** — avoid destructive tests. When a second project is available, use it for staging and keep prod isolated.
 
 ---
 
@@ -21,17 +48,22 @@ Fill in real URLs and procedures as you complete Sprint 0 DevSecOps tasks.
 
 Set in `client/.env` locally or via **EAS Secrets** per build profile.
 
-| Variable | dev | staging | prod |
-|----------|-----|---------|------|
-| `EXPO_PUBLIC_SUPABASE_URL` | dev project URL | staging project URL | prod project URL |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | dev anon/publishable key | staging anon key | prod anon key |
+| Variable | dev (local) | staging (preview) | prod (launch) |
+|----------|-------------|-------------------|---------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://wukmanrpnbfoyqtjdxjs.supabase.co` | same (until second project) | new prod project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | publishable/anon key for shared project | same | prod anon key |
 | `EXPO_PUBLIC_API_BASE_URL` | `http://<PC_LAN_IP>:8000` | `https://<staging-api-host>` | `https://<prod-api-host>` |
 
+**Current local values** (`client/.env`):
+
+- `EXPO_PUBLIC_SUPABASE_URL=https://wukmanrpnbfoyqtjdxjs.supabase.co`
+- `EXPO_PUBLIC_API_BASE_URL=http://192.168.68.67:8000` _(update LAN IP when DHCP changes)_
+
 ```bash
-# Example EAS secrets (run per profile — replace values)
-eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "https://xxxx.supabase.co" --type string
-eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "eyJ..." --type string
-eas secret:create --scope project --name EXPO_PUBLIC_API_BASE_URL --value "https://api-staging.example.com" --type string
+# EAS secrets — preview profile (staging API; same Supabase for now)
+eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "https://wukmanrpnbfoyqtjdxjs.supabase.co" --type string
+eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "<anon-key>" --type string
+eas secret:create --scope project --name EXPO_PUBLIC_API_BASE_URL --value "https://<staging-api-host>" --type string
 ```
 
 ---
@@ -40,33 +72,41 @@ eas secret:create --scope project --name EXPO_PUBLIC_API_BASE_URL --value "https
 
 Set on Railway / Fly.io / Render / VPS — **not** in git.
 
-| Variable | dev | staging | prod |
-|----------|-----|---------|------|
-| `SUPABASE_URL` | dev URL | staging URL | prod URL |
-| `SUPABASE_KEY` | dev **secret** / service_role | staging secret | prod secret |
-| `SUPABASE_ANON_KEY` | dev anon key | staging anon key | prod anon key |
+| Variable | dev (local) | staging / preview host | prod host |
+|----------|-------------|------------------------|-----------|
+| `SUPABASE_URL` | `https://wukmanrpnbfoyqtjdxjs.supabase.co` | same | prod URL at launch |
+| `SUPABASE_KEY` | secret / service_role for shared project | same | prod secret |
+| `SUPABASE_ANON_KEY` | anon key for shared project | same | prod anon |
 | `DEBUG_ENROLL_IMAGES` | `1` (optional) | **`0`** | **`0`** |
+
+**Current local values** (`server/.env`): active keys point at `wukmanrpnbfoyqtjdxjs`. Remove or ignore stale commented refs to other project IDs.
 
 ---
 
 ## Local development
 
 1. Copy `client/.env.example` → `client/.env` and `server/.env.example` → `server/.env`.
-2. Point both at **dev** Supabase credentials.
+2. Point both at the shared project (`wukmanrpnbfoyqtjdxjs`).
 3. Start API: `cd server && uvicorn main:app --host 0.0.0.0 --port 8000`
 4. Set `EXPO_PUBLIC_API_BASE_URL` to your PC’s LAN IP (same Wi‑Fi as the device).
-5. Android dev builds may use HTTP (`usesCleartextTraffic`); staging/prod API must be **HTTPS only**.
+5. Android dev builds may use HTTP (`usesCleartextTraffic`); deployed staging/prod API must be **HTTPS only**.
 
 ---
 
 ## Staging reset procedure
 
-_(Document your steps after first staging setup.)_
+**Not available on free tier** (single shared DB). Options until a second project exists:
+
+1. **Avoid destructive QA** on the shared project; use test branches/students with clear naming.
+2. **Manual selective cleanup** via SQL Editor (truncate specific tables) — only if you accept data loss on the only copy.
+3. **At launch:** create `mccc-prod`, migrate fresh, and repurpose or recreate a staging project on a paid plan.
+
+When a dedicated staging project exists:
 
 1. Pause or scale down staging API if needed.
-2. In Supabase **staging** project: truncate/reseed tables or restore from seed script.
+2. Truncate/reseed tables in the **staging** project only.
 3. Re-run `server/scripts/bootstrap_admin_coach.py` against staging if admin coach was wiped.
-4. Smoke-test: login → enroll face → attendance → fees (when available).
+4. Smoke-test: login → enroll face → attendance → fees.
 
 ---
 
@@ -98,19 +138,19 @@ curl -X POST https://YOUR_STAGING_API/enroll \
 
 - Workflow: `.github/workflows/ci.yml` — lint client, compile-check Python server.
 - Enable **branch protection**: require CI pass on PRs.
-- Enable **Dependabot** for `client/` and `server/` (GitHub → Settings → Security).
+- **Dependabot:** `.github/dependabot.yml` — active for `client/` and `server/`.
 
 ---
 
-## Recorded URLs (fill in)
+## Recorded URLs
 
 | Item | dev | staging | prod |
 |------|-----|---------|------|
-| Supabase URL | | | |
-| Supabase project ref | | | |
-| Face API URL | | | |
-| EAS profile names | development | preview | production |
-| Last staging reset | — | — | — |
+| Supabase URL | `https://wukmanrpnbfoyqtjdxjs.supabase.co` | same (shared) | _(create at launch)_ |
+| Supabase project ref | `wukmanrpnbfoyqtjdxjs` | same | _(create at launch)_ |
+| Face API URL | `http://192.168.68.67:8000` | _(deploy pending)_ | _(at launch)_ |
+| EAS profile names | `development` | `preview` | `production` |
+| Last staging reset | N/A (single DB) | N/A | — |
 
 ---
 
@@ -124,14 +164,14 @@ _(Optional: who owns prod access, who can rotate secrets.)_
 
 **Last reviewed:** 2026-07-07  
 **Export:** `supabase-warning.csv` (26 warnings, 0 errors)  
-**Remediation migration:** `supabase/migrations/20260707120000_security_advisor_sprint0.sql`
+**Remediation migration:** `supabase/migrations/20260707120000_security_advisor_sprint0.sql` — **applied** to shared project
 
 ### Summary by group
 
 | Group | Count | Priority | Action |
 |-------|------:|----------|--------|
-| **A — Fix immediately** | 3 types | High | Apply migration + enable leaked-password check |
-| **B — Fixed by migration (RPC grants)** | 22 rows | High | Same migration; re-run advisor |
+| **A — Fix immediately** | 3 types | High | Migration applied; enable leaked-password check |
+| **B — Fixed by migration (RPC grants)** | 22 rows | High | Applied; re-run advisor to confirm |
 | **C — Accept / defer** | 2 | Low | Document; fix before prod if needed |
 
 ### A — Fix immediately
@@ -182,14 +222,6 @@ Policy `student_auth_photos_select` lets clients list **all** files in the bucke
 | `extension_in_public` (`vector`) | Standard pgvector setup; moving schemas is risky | Before prod hardening / Supabase upgrade |
 | `authenticated_security_definer_function_executable` on intentional coach RPCs | Linter flags any `SECURITY DEFINER` + `authenticated`; functions use `auth.uid()` or internal guards | Sprint 0.5 — consider `SECURITY INVOKER` where safe |
 
-### How to apply
-
-1. Supabase Dashboard → **SQL Editor** → paste/run  
-   `supabase/migrations/20260707120000_security_advisor_sprint0.sql`
-2. Enable leaked password protection (Dashboard).
-3. **Advisors → Security** → re-run; expect **~2–8 warnings** remaining (extension + residual DEFINER notices).
-4. Smoke-test app: login, set password, coach requests, fees refresh, enroll, attendance.
-
 ### Post-migration expected warnings
 
 - `extension_in_public` (vector) — accepted until pgvector schema move
@@ -198,8 +230,8 @@ Policy `student_auth_photos_select` lets clients list **all** files in the bucke
 ### Sprint 0 Task 11 — done when
 
 - [x] Advisor export saved (`supabase-warning.csv`)
-- [ ] Migration applied on dev project
+- [x] Migration applied on shared project
 - [ ] Leaked password protection enabled
-- [ ] Critical items (admin RPCs, storage listing) resolved
+- [x] Critical items (admin RPCs, storage listing) resolved via migration
 - [ ] App smoke-test passed after migration
-- [ ] Remaining warnings documented in this section
+- [x] Remaining warnings documented in this section

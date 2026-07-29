@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router'; // Added useLocalSearchParams
 import { fetchStudentsForBatch } from "../../lib/dataFromSupabase";
+import { useEffectiveBranch } from "../../contexts/BranchContext";
 
 interface Student {
   student_id: string; 
@@ -49,7 +50,9 @@ const StudentCard = ({
 export default function StudentDirectory() {
   const { batch_id, batch_name, branch_id, branch_name } = useLocalSearchParams();
   const batchId = Array.isArray(batch_id) ? batch_id[0] : batch_id;
-  const branchId = Array.isArray(branch_id) ? branch_id[0] : branch_id;
+  const effectiveBranch = useEffectiveBranch(branch_id, branch_name);
+  const branchId = effectiveBranch?.branchId;
+  const branchName = effectiveBranch?.branchName;
   const [search, setSearch] = useState('');
   
   const [students, setStudents] = useState<Student[]>([]);
@@ -126,7 +129,7 @@ export default function StudentDirectory() {
                   batch_id: batchId,
                   batch_name: batch_name,
                   branch_id: branchId ?? "",
-                  branch_name: branch_name ?? "",
+                  branch_name: branchName ?? "",
                 },
               });
             }}

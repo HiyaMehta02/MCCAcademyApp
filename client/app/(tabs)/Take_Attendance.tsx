@@ -12,6 +12,8 @@ import { getCoachAuthHeaders } from "../../lib/apiAuth";
 import {
   AttendanceStatus,
   fetchBatchAttendanceForDate,
+  isAttendanceCrossBranch,
+  isAttendanceOffSchedule,
   setStudentAttendance,
   todayDateString,
 } from "../../lib/attendance";
@@ -194,14 +196,59 @@ export default function TakeAttendance() {
     const current = attendanceToday[studentId];
     const nextStatus: AttendanceStatus = current === "Present" ? "Absent" : "Present";
 
-    setAttendanceBusyId(studentId);
+    const apply = async (opts?: {
+      isOffSchedule?: boolean;
+      isCrossBranch?: boolean;
+    }) => {
+      setAttendanceBusyId(studentId);
+      try {
+        await setStudentAttendance(studentId, batchId, sessionDate, nextStatus, {
+          isOffSchedule: opts?.isOffSchedule ?? false,
+          isCrossBranch: opts?.isCrossBranch ?? false,
+        });
+        setAttendanceToday((prev) => ({ ...prev, [studentId]: nextStatus }));
+      } catch (err: any) {
+        Alert.alert("Error", err?.message ?? "Failed to update attendance.");
+      } finally {
+        setAttendanceBusyId(null);
+      }
+    };
+
+    if (nextStatus !== "Present") {
+      await apply();
+      return;
+    }
+
     try {
-      await setStudentAttendance(studentId, batchId, sessionDate, nextStatus);
-      setAttendanceToday((prev) => ({ ...prev, [studentId]: nextStatus }));
+      const [offSchedule, crossBranch] = await Promise.all([
+        isAttendanceOffSchedule(studentId, sessionDate),
+        isAttendanceCrossBranch(studentId, batchId),
+      ]);
+
+      if (!offSchedule && !crossBranch) {
+        await apply();
+        return;
+      }
+
+      const warnings: string[] = [];
+      if (offSchedule) {
+        warnings.push("This day is outside the student's selected batch schedule (WD/WE/SPL).");
+      }
+      if (crossBranch) {
+        warnings.push("This student usually trains at a different branch.");
+      }
+
+      Alert.alert("Attendance warning", warnings.join("\n\n"), [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark present anyway",
+          onPress: () => {
+            void apply({ isOffSchedule: offSchedule, isCrossBranch: crossBranch });
+          },
+        },
+      ]);
     } catch (err: any) {
-      Alert.alert("Error", err?.message ?? "Failed to update attendance.");
-    } finally {
-      setAttendanceBusyId(null);
+      Alert.alert("Error", err?.message ?? "Failed to check schedule.");
     }
   }
 

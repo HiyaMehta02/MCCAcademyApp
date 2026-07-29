@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { useBranch, useEffectiveBranch } from '../../contexts/BranchContext';
 
 // 1. Update the interface to include the schedule list
 interface BatchSchedule {
@@ -81,12 +82,20 @@ const BatchRow: React.FC<{ batch: Batch; branchId?: string; branchName?: string 
 
 export default function Batch_Screen() {
   const { branch_id, branch_name } = useLocalSearchParams();
-  const branchId = Array.isArray(branch_id) ? branch_id[0] : branch_id;
-  const branchName = Array.isArray(branch_name) ? branch_name[0] : branch_name;
+  const effectiveBranch = useEffectiveBranch(branch_id, branch_name);
+  const branchId = effectiveBranch?.branchId;
+  const branchName = effectiveBranch?.branchName;
+  const { setBranch } = useBranch();
   const [searchTerm, setSearchTerm] = useState('');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (branchId && branchName) {
+      setBranch(branchId, branchName);
+    }
+  }, [branchId, branchName, setBranch]);
 
   useEffect(() => {
     async function fetchBatches() {
@@ -151,7 +160,7 @@ export default function Batch_Screen() {
           />
           <View style={styles.logoContainer}>
             <Text style={styles.logoTopText}>
-              {branch_name ? branch_name : "SELECT BRANCH"}
+              {branchName ? branchName : "SELECT BRANCH"}
             </Text>
           </View>
         </View>

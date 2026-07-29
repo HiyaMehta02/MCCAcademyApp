@@ -25,8 +25,12 @@ export default ({ config }) => {
         backgroundColor: '#ffffff'
       },
       edgeToEdgeEnabled: true,
-      // Allow http:// to your LAN API (port 8000) during development
-      usesCleartextTraffic: true,
+      // Cleartext HTTP only for local/dev clients. preview/production EAS builds
+      // must set APP_VARIANT=preview|production so HTTPS-only Face API is enforced.
+      usesCleartextTraffic:
+        process.env.APP_VARIANT === 'development' ||
+        process.env.APP_VARIANT === undefined && process.env.EAS_BUILD_PROFILE === 'development' ||
+        (!process.env.EAS_BUILD_PROFILE && process.env.NODE_ENV !== 'production'),
     },
     plugins: [
       'expo-router',

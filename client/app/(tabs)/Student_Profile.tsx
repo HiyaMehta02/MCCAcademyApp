@@ -40,6 +40,8 @@ import {
   removeStudentCustomPlan,
   FEE_PROGRAM_SCHEDULES,
 } from "../../lib/studentProfile";
+import { formatAttendanceDayLabel, formatDobLong } from "../../lib/dateFormat";
+import ResidentCardSection from "../../components/ResidentCardSection";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -55,7 +57,7 @@ function formatOmr(amount: number): string {
 
 function formatDate(iso: string): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString();
 }
@@ -375,16 +377,31 @@ export default function StudentProfileScreen() {
             {profile.parent_phone ? `Phone: ${profile.parent_phone}` : "No phone on file"}
           </Text>
           <Text style={styles.metaText}>
+            DOB: {formatDobLong(profile.dob)}
+            {profile.clothes_size ? ` · Kit size ${profile.clothes_size}` : ""}
+          </Text>
+          <Text style={styles.metaText}>
             {profile.branches?.branch_name ?? "Branch"} · {profile.gender === "boy" ? "Boy" : "Girl"}
             {profile.is_sibling_discount_eligible ? " · Sibling discount" : ""}
           </Text>
         </View>
 
+        <Section title="Oman resident card">
+          <ResidentCardSection
+            studentId={profile.student_id}
+            frontPath={profile.resident_card_front_path}
+            backPath={profile.resident_card_back_path}
+            onChanged={() => {
+              void loadProfile();
+            }}
+          />
+        </Section>
+
         {showOverdueBanner && (
           <View style={styles.overdueBanner}>
             <Ionicons name="warning-outline" size={20} color="#fff" />
             <Text style={styles.overdueText}>
-              Fees due before the 7th — balance {formatOmr(billing!.balance_due)}
+              Fees unpaid — balance {formatOmr(billing!.balance_due)} (reminders on the 15th & 25th)
             </Text>
           </View>
         )}
@@ -577,9 +594,11 @@ export default function StudentProfileScreen() {
             <>
               {attendance.map((a) => (
                 <View key={a.attendance_id} style={styles.attendanceRow}>
-                  <Text style={styles.rowTitle}>{formatDate(a.date)}</Text>
+                  <Text style={styles.rowTitle}>{formatAttendanceDayLabel(a.date)}</Text>
                   <Text style={styles.rowSub}>
                     {a.batches?.batch_name ?? "Batch"} · {a.status}
+                    {a.is_off_schedule ? " · off-schedule" : ""}
+                    {a.is_cross_branch ? " · other branch" : ""}
                   </Text>
                 </View>
               ))}

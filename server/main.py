@@ -209,6 +209,43 @@ def _save_debug_enroll_image(student_id: str, image_bytes: bytes, original_name:
     return out
 
 
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _sniff_image_type(data: bytes) -> str | None:
+    """Return a normalized content-type from magic bytes, or None if unknown."""
+    if len(data) >= 3 and data[0:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(data) >= 8 and data[0:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(data) >= 12 and data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+async def _validate_image_upload(file: UploadFile) -> bytes:
+    """Read upload once; enforce size/type; rewind file. Raises HTTPException on failure."""
+    await file.seek(0)
+    data = await file.read()
+
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty upload.")
+
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 5 MB).")
+
+    sniffed = _sniff_image_type(data)
+    if sniffed not in _ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: jpeg, png, webp.",
+        )
+
+    await file.seek(0)
+    return data
+
+
 def _json_error(status_code: int, message: str, details: str | None = None) -> JSONResponse:
     body: dict = {"error": message}
     if details:
@@ -297,8 +334,7 @@ async def enroll_player(
 ):
     await _require_coach(authorization)
     await _require_coach_can_act_on_student(student_id, batch_id)
-    await file.seek(0)
-    raw_bytes = await file.read()
+    raw_bytes = await _validate_image_upload(file)
     saved = _save_debug_enroll_image(student_id, raw_bytes, file.filename)
     if saved is not None:
         print(f"[debug enroll] saved: {saved}")
@@ -336,6 +372,7 @@ async def check_attendance(
 ):
     await _require_coach(authorization)
     await _require_coach_can_act_on_student(student_id, batch_id)
+    await _validate_image_upload(file)
     embedding = await _extract_face_embedding(file)
     if isinstance(embedding, JSONResponse):
         return embedding

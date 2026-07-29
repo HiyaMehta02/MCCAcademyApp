@@ -24,9 +24,11 @@ import {
   refreshStudentBilling,
   currentBillingPeriod,
 } from "../../lib/studentProfile";
+import { useBranch } from "../../contexts/BranchContext";
 
 export default function RegisterStudentScreen() {
   const params = useLocalSearchParams();
+  const { branch: contextBranch } = useBranch();
   const batchId = Array.isArray(params.batch_id) ? params.batch_id[0] : params.batch_id;
   const batchName = Array.isArray(params.batch_name) ? params.batch_name[0] : params.batch_name;
   const branchIdParam = Array.isArray(params.branch_id) ? params.branch_id[0] : params.branch_id;
@@ -52,7 +54,7 @@ export default function RegisterStudentScreen() {
         const branchList = await fetchBranches();
         setBranches(branchList);
 
-        let branchId = branchIdParam ?? "";
+        let branchId = branchIdParam ?? contextBranch?.branchId ?? "";
         if (!branchId && batchId) {
           branchId = (await fetchBatchBranch(batchId)) ?? "";
         }
@@ -64,7 +66,7 @@ export default function RegisterStudentScreen() {
       }
     }
     init();
-  }, [batchId, branchIdParam]);
+  }, [batchId, branchIdParam, contextBranch?.branchId]);
 
   async function handleSubmit() {
     if (!firstName.trim() || !lastName.trim()) {

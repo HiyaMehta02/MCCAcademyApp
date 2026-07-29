@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { Stack, usePathname, useRouter } from "expo-router";
+import CoachMenu from "../components/CoachMenu";
+import CoachMenuButton from "../components/CoachMenuButton";
+import { BranchProvider } from "../contexts/BranchContext";
+import { CoachMenuProvider } from "../contexts/CoachMenuContext";
 import { supabase } from "../lib/supabase";
 
 function normalizePath(path: string | null | undefined): string {
@@ -148,14 +152,22 @@ export default function Layout() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="set-password" options={{ headerShown: false }} />
-      <Stack.Screen name="no-access" options={{ headerShown: false }} />
-      <Stack.Screen name="pending" options={{ headerShown: false }} />
-      <Stack.Screen name="rejected" options={{ headerShown: false }} />
-      <Stack.Screen name="suspended" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerTitle: "Home", headerShown: false }} />
-    </Stack>
+    <BranchProvider>
+      <CoachMenuProvider>
+        <View style={{ flex: 1 }}>
+          <Stack>
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="set-password" options={{ headerShown: false }} />
+            <Stack.Screen name="no-access" options={{ headerShown: false }} />
+            <Stack.Screen name="pending" options={{ headerShown: false }} />
+            <Stack.Screen name="rejected" options={{ headerShown: false }} />
+            <Stack.Screen name="suspended" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerTitle: "Home", headerShown: false }} />
+          </Stack>
+          <CoachMenuButton />
+          <CoachMenu />
+        </View>
+      </CoachMenuProvider>
+    </BranchProvider>
   );
 }

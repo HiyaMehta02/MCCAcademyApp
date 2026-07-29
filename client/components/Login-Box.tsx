@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/build/Ionicons";
+import { useBranch } from "../contexts/BranchContext";
 import { supabase } from "../lib/supabase";
 import {
   GENERIC_LOGIN_ERROR,
@@ -35,6 +36,7 @@ type GreenBoxProps = {
 };
 
 export default function GreenBox({ style }: GreenBoxProps) {
+  const { setBranch, clearBranch } = useBranch();
   const [authResolved, setAuthResolved] = useState(false);
   const [phase, setPhase] = useState<"login" | "branch">("login");
   const [hasSession, setHasSession] = useState(false);
@@ -109,12 +111,14 @@ export default function GreenBox({ style }: GreenBoxProps) {
     }
   };
 
-  const handleBranchConfirm = () => {
+  const handleBranchConfirm = async () => {
+    if (!selectedBranch) return;
+    await setBranch(selectedBranch.branch_id, selectedBranch.branch_name);
     router.push({
       pathname: "/Batch_Screen",
       params: {
-        branch_id: selectedBranch?.branch_id,
-        branch_name: selectedBranch?.branch_name,
+        branch_id: selectedBranch.branch_id,
+        branch_name: selectedBranch.branch_name,
       },
     });
   };
@@ -293,8 +297,9 @@ export default function GreenBox({ style }: GreenBoxProps) {
 
               <View style={styles.footer}>
                 <TouchableOpacity
-                  onPress={() => {
-                    supabase.auth.signOut();
+                  onPress={async () => {
+                    await clearBranch();
+                    await supabase.auth.signOut();
                     setPhase("login");
                   }}
                   style={styles.footerBtn}

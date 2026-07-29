@@ -15,27 +15,26 @@ import {
   AttendanceRecord,
   fetchStudentAttendance,
 } from "../../lib/studentProfile";
+import { formatAttendanceDayLabel } from "../../lib/dateFormat";
 
 export const ATTENDANCE_PREVIEW_LIMIT = 5;
 
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+function AttendanceRow({ item, index }: { item: AttendanceRecord; index: number }) {
+  const flags = [
+    item.is_off_schedule ? "off-schedule" : null,
+    item.is_cross_branch ? "other branch" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-function AttendanceRow({ item }: { item: AttendanceRecord }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.date}>{formatDate(item.date)}</Text>
+      <Text style={styles.date}>
+        {index + 1}. {formatAttendanceDayLabel(item.date)}
+      </Text>
       <Text style={styles.meta}>
         {item.batches?.batch_name ?? "Batch"} · {item.status}
+        {flags ? ` · ${flags}` : ""}
       </Text>
     </View>
   );
@@ -91,7 +90,16 @@ export default function StudentAttendanceHistoryScreen() {
         <FlatList
           data={attendance}
           keyExtractor={(item) => item.attendance_id}
-          renderItem={({ item }) => <AttendanceRow item={item} />}
+          ListHeaderComponent={
+            <Text style={styles.summary}>
+              {
+                attendance.filter((a) => a.status === "Present").length
+              }{" "}
+              day{attendance.filter((a) => a.status === "Present").length === 1 ? "" : "s"}{" "}
+              attended
+            </Text>
+          }
+          renderItem={({ item, index }) => <AttendanceRow item={item} index={index} />}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
@@ -127,6 +135,12 @@ const styles = StyleSheet.create({
   subtitle: { color: "#aaa", fontSize: 14, marginTop: 2 },
   centerFill: { flex: 1, justifyContent: "center", alignItems: "center" },
   empty: { color: "#888", fontSize: 16 },
+  summary: {
+    color: "#cfcfcf",
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
   listContent: { paddingBottom: 32 },
   row: {
     backgroundColor: "#2a2a2a",

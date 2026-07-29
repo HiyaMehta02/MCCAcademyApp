@@ -108,6 +108,9 @@ export default function AddStudent() {
 
         const formData = new FormData();
         formData.append('student_id', selectedStudent.student_id);
+        if (batchId) {
+          formData.append('batch_id', batchId as string);
+        }
         formData.append('file', {
         uri: photo.uri,
         name: 'initialization.jpg',
