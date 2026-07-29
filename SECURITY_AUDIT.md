@@ -12,7 +12,7 @@
 | Field | Value |
 |-------|-------|
 | Start date |07/28/2026 |
-| End date |07/28/2026 |
+| End date |07/29/2026 |
 | Environment tested | (local) / staging | UPDATE ONCE COMMITED
 | API base URL used | |
 | Advisor export filename | |
@@ -25,8 +25,8 @@
 - [DONE] A0 Design note complete
 - [DONE] A1 Leaked password protection
 - [DONE] A2 Object-level AuthZ
-- [ ] A3 Upload limits
-- [ ] A4 Debug enroll images off
+- [DONE] A3 Upload limits
+- [DONE] A4 Debug enroll images off
 - [ ] A5 `student_auth` RLS
 - [ ] A6 `face_api_audit_log`
 - [ ] A7 Cleartext only in development
@@ -222,20 +222,23 @@ _Explain your scope rule like you would to an interviewer:_
 
 | Item | Before | After |
 |------|--------|-------|
-| Default when env unset | | |
-| `server/.env` value | | |
-| Deleted `debug_enroll/` files? | yes / no / n/a | |
+| Default when env unset | 1 (ON) | 0 (OFF) |
+| `server/.env` value | unset | 0 |
+| Deleted `debug_enroll/` files? | n/a (no folder/files) | n/a |
 
 ### Evidence
 
-- [ ] Confirmed no new files appear in `server/debug_enroll/` after a test enroll with debug off
-- [ ] Restarted uvicorn after `.env` change
+- [DONE] Confirmed no new files appear in `server/debug_enroll/` after a test enroll with debug off
+- [DONE] Restarted uvicorn after `.env` change
 
 ### Lab questions
 
 1. Why is “debug save face images” dangerous on a shared machine or staging server?
+> Face photos are biometric data. If debug mode writes them to disk on a shared laptop or staging host, anyone with filesystem access (other users, ops, a later compromise) can copy them. That creates an unnecessary biometric store outside the product’s intended path (embeddings in the DB), often with no access controls or retention policy.
 2. How is this related to **data minimization** (privacy)?
+> Data minimization means you only collect and keep what you need. Enrollment already needs an image in memory to build an embedding; saving a second copy under `debug_enroll/` is extra retention you do not need for the feature to work. Turning debug off by default avoids holding face images longer (and in more places) than necessary.
 3. If debug must exist for local troubleshooting, what safeguards would you require (env, path, retention)?
+> Opt-in only via env (`DEBUG_ENROLL_IMAGES=1`), never on staging/prod. Write only to a local path that is gitignored (e.g. `server/debug_enroll/`), not into the repo or shared storage. Delete files as soon as debugging is done (or auto-expire them), and never commit or upload those images.
 
 ---
 

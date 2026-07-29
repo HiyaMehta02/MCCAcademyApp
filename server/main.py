@@ -191,7 +191,7 @@ _warn_supabase_key_for_server_writes()
 
 
 def _debug_enroll_images_enabled() -> bool:
-    v = os.environ.get("DEBUG_ENROLL_IMAGES", "1").strip().lower()
+    v = os.environ.get("DEBUG_ENROLL_IMAGES", "0").strip().lower()
     return v in ("1", "true", "yes", "on")
 
 
