@@ -9,7 +9,7 @@ import pathlib
 import re
 
 import httpx
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Body
 from fastapi.responses import JSONResponse
 import face_recognition
 import numpy as np
@@ -18,6 +18,10 @@ from supabase import create_client, Client
 from postgrest.exceptions import APIError
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from typing import Any
+
+from import_engine import ImportEngine
 
 load_dotenv()
 app = FastAPI()
@@ -92,10 +96,58 @@ async def _require_coach(authorization: str | None) -> None:
     raise HTTPException(status_code=403, detail="Coach access required.")
 
 
-async def _require_admin(authorization: str | None) -> None:
+async def _require_coach_can_act_on_student(student_id: str, batch_id: str) -> None:
+    student_id = (student_id or "").strip()
+    batch_id = (batch_id or "").strip()
+    if not student_id or not batch_id:
+        raise HTTPException(status_code=403, detail="Out of scope.")
+
+    response = (
+        supabase.table("batch_members")
+        .select("student_id, students(status)")
+        .eq("batch_id", batch_id)
+        .eq("student_id", student_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        raise HTTPException(status_code=403, detail="Out of scope.")
+
+    student = response.data[0].get("students")
+    if not student:
+        raise HTTPException(status_code=403, detail="Out of scope.")
+
+    # App treats null status as active elsewhere (.or status.eq.active,status.is.null)
+    status = student.get("status")
+    if status is not None and status != "active":
+        raise HTTPException(status_code=403, detail="Student is not active.")
+
+
+async def _require_admin(authorization: str | None) -> str:
     token = _bearer_token(authorization)
     if not await _rpc_returns_true(token, "is_current_user_admin"):
         raise HTTPException(status_code=403, detail="Admin access required.")
+    return token
+
+
+async def _current_coach_id(token: str) -> str | None:
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/current_coach_id",
+            headers=_supabase_user_headers(token),
+            json={},
+        )
+    if response.status_code >= 400:
+        return None
+    value = response.json()
+    return str(value) if value else None
+
+
+class ImportCsvRequest(BaseModel):
+    dry_run: bool = True
+    filename: str | None = None
+    records: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _warn_supabase_key_for_server_writes() -> None:
@@ -240,9 +292,11 @@ async def _extract_face_embedding(file: UploadFile) -> list[float] | JSONRespons
 async def enroll_player(
     authorization: str = Header(...),
     student_id: str = Form(...),
+    batch_id: str = Form(...),
     file: UploadFile = File(...),
 ):
     await _require_coach(authorization)
+    await _require_coach_can_act_on_student(student_id, batch_id)
     await file.seek(0)
     raw_bytes = await file.read()
     saved = _save_debug_enroll_image(student_id, raw_bytes, file.filename)
@@ -281,6 +335,7 @@ async def check_attendance(
     file: UploadFile = File(...),
 ):
     await _require_coach(authorization)
+    await _require_coach_can_act_on_student(student_id, batch_id)
     embedding = await _extract_face_embedding(file)
     if isinstance(embedding, JSONResponse):
         return embedding
@@ -409,7 +464,6 @@ async def admin_create_coach(
         "coach_id": coach_id,
     }
 
-
 @app.post("/admin/coaches/{login_id}/reset-password")
 async def admin_reset_coach_password(
     login_id: str,
@@ -489,3 +543,53 @@ async def get_students_by_batch(batch_id: str, authorization: str = Header(...))
         return {"students": [], "error": str(response.error)}
 
     return {"students": response.data}
+
+
+@app.post("/admin/import/csv")
+async def admin_import_csv(
+    authorization: str = Header(...),
+    body: ImportCsvRequest = Body(...),
+):
+    token = await _require_admin(authorization)
+
+    if not body.records:
+        return _json_error(400, "No import records provided.")
+
+    if len(body.records) > 5000:
+        return _json_error(400, "Import limited to 5000 rows per request.")
+
+    engine = ImportEngine(supabase)
+    try:
+        result = engine.run(body.records, dry_run=body.dry_run)
+    except APIError as exc:
+        return _handle_api_error(exc, "CSV import")
+
+    if not body.dry_run:
+        coach_id = await _current_coach_id(token)
+        try:
+            audit = (
+                supabase.table("import_audit_log")
+                .insert(
+                    {
+                        "coach_id": coach_id,
+                        "filename": body.filename,
+                        "dry_run": False,
+                        "total_rows": result["total_rows"],
+                        "success_count": result["success_count"],
+                        "error_count": result["error_count"],
+                        "summary": {
+                            "created": result.get("created"),
+                            "row_results": result.get("row_results", [])[:100],
+                        },
+                    }
+                )
+                .select("import_id")
+                .single()
+                .execute()
+            )
+            if audit.data:
+                result["import_id"] = audit.data.get("import_id")
+        except APIError as exc:
+            print(f"[import audit warning] {exc}")
+
+    return result
