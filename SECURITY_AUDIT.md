@@ -246,35 +246,51 @@ _Explain your scope rule like you would to an interviewer:_
 
 ### What you wrote / applied
 
+**Policy Contract**
+
+```
+anon           → no SELECT / INSERT / UPDATE / DELETE on student_auth
+authenticated  → no SELECT / INSERT / UPDATE / DELETE on student_auth
+                (even metadata — prefer no client access at all)
+service_role   → Face API may read/write (bypasses RLS; keep GRANTs)
+```
+
 | Item | Notes |
 |------|-------|
-| Migration file | |
-| RLS enabled? | yes / no |
-| Can `anon` SELECT embeddings? | |
-| Can `authenticated` SELECT embeddings? | |
-| Who can write embeddings? | |
-| Applied in SQL Editor? | date/time: |
+| Migration file |20260729140000_phase_a_student_auth_rls_and_face_audit.sql |
+| RLS enabled? | yes |
+| Can `anon` SELECT embeddings? |no |
+| Can `authenticated` SELECT embeddings? |no |
+| Who can write embeddings? |FastAPI (service_role) |
+| Applied in SQL Editor? | date: 7/29/26 |
 
 ### Evidence
 
-| # | Test | Expected | Actual | Pass? |
-|---|------|----------|--------|-------|
-| 1 | Coach JWT client: `select face_embedding from student_auth` | deny / empty / error | | |
-| 2 | Face API enroll still works (service role) | success path OK | | |
-| 3 | `pg_policy` list for `student_auth` recorded below | policies exist | | |
+| # | Test | Expected | Actual | Pass? | Proof |
+|---|------|----------|--------|-------|-------|
+| 1 | Coach JWT client: `select face_embedding from student_auth` | deny / empty / error |403 |YES |![Test 1 Proof](images/Test_1_AA5.png) |
+| 2 | Face API enroll still works (service role) | success path OK |200 |YES |![Test 2 Proof](images/Test_2_AA5.png) |
+| 3 | `pg_policy` list for `student_auth` recorded below | policies exist |Returned student_auth_deny_anon and student_auth_deny_authenticated |YES |![Test 3 Proof](images/Test_3_AA5.png) |
 
 **Policies you observed (paste names only):**
 
 ```
+student_auth_deny_anon
+student_auth_deny_authenticated
 ```
 
 ### Lab questions
 
 1. What does **RLS** enforce, and at what layer (app vs database)?
+> Row Level Security enforces which rows a database role may SELECT/INSERT/UPDATE/DELETE on a table. It runs in **Postgres (database layer)**, not in the React Native UI or FastAPI. The app can hide screens, but RLS is what actually blocks a direct Supabase/PostgREST call.
 2. Why must embeddings be blocked from the mobile client even if the UI never shows them?
+> “UI never shows it” is not a control. Anyone with the anon key and a coach JWT can call the Supabase REST API directly (curl, modified app, proxy). If `authenticated` can SELECT `face_embedding`, they can exfiltrate biometric templates even though no screen displays them. Defense in depth: block at the database with RLS + grants.
 3. Explain **least privilege** using `anon` vs `authenticated` vs `service_role` for this table.
+> Give each role only what it needs: `anon` (not logged in) gets **no** access to `student_auth`; `authenticated` (logged-in coaches) also gets **no** access — coaches don’t need embeddings in the client; `service_role` (Face API `SUPABASE_KEY`) alone may read/write embeddings to enroll and match faces. Anything broader than that is excess privilege.
 4. If RLS blocks clients but the Face API uses service_role, what attack still exists without A2?
+> **IDOR via the Face API:** an approved coach with a valid JWT can still POST `/enroll` or `/check-attendance` with another student’s `student_id` (and a batch pairing they shouldn’t use). `service_role` bypasses RLS, so the DB will accept the write unless the API enforces object-level AuthZ (A2) first.
 5. What is a `SECURITY DEFINER` function risk (from Sprint 0 advisor work) in one sentence?
+> A `SECURITY DEFINER` function runs with the **owner’s** privileges, so if `anon`/`authenticated` can execute it without tight guards, it can bypass normal RLS and expose or change data the caller should not reach (Sprint 0 revoked several of these from public/anon).
 
 ---
 
