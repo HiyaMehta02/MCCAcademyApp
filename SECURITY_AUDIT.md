@@ -1,13 +1,17 @@
-# Security Audit Lab — Phase A
+# Security Audit Lab — Phase A & Phase B
 
 **Purpose:** Track what you did *and* prove you understand it. Treat each section like a lab write-up. Do not check a box until you can answer that section’s questions out loud without looking at notes for ~30 seconds.
 
 **How to use**
 
-1. Fill **Design** before you write code.
+1. Fill **Design** before you write code / change infra.
 2. After each step: record **Evidence**, then answer **Lab questions** in full sentences (not one-word answers).
-3. End with **Teach-backs** and **Residual risks**.
+3. End each phase with **Teach-backs** and **Residual risks**.
 4. Never paste real JWTs, service-role keys, or student PII here — use redacted IDs (`student_id=…aaa1`).
+
+---
+
+# Phase A — Close the blast radius
 
 | Field | Value |
 |-------|-------|
@@ -27,9 +31,9 @@
 - [DONE] A2 Object-level AuthZ
 - [DONE] A3 Upload limits
 - [DONE] A4 Debug enroll images off
-- [ ] A5 `student_auth` RLS
-- [ ] A6 `face_api_audit_log`
-- [ ] A7 Cleartext only in development
+- [DONE] A5 `student_auth` RLS
+- [DONE] A6 `face_api_audit_log`
+- [DONE] A7 Cleartext only in development
 - [ ] A8 Security Advisor re-export + triage
 - [ ] Final teach-backs + residual risks
 
@@ -300,39 +304,37 @@ student_auth_deny_authenticated
 
 | Column | Purpose |
 |--------|---------|
-| | |
-| | |
-| | |
-| | |
-
-### Where you write audit rows
-
-| Event | Success logged? | Failure logged? | File/function |
-|-------|-----------------|-----------------|---------------|
-| AuthZ deny | | | |
-| Enroll | | | |
-| Attendance | | | |
+|id |Unique id for each audit |
+|created_at |When the event happened |
+|coach_id |Which coach (or admin) made the request |
+|action |What they tried (enroll, check_attendance, authz_deny) |
+|student_id |Which student the request targeted |
+|batch_id |Which batch was used for the AuthZ check |
+|success | Whether the action succeeded (true/false) |
+|detail | Short reason code only (ex. out_of_scope, no_face) |
 
 ### Evidence
 
-```sql
--- Paste a redacted query result description (counts / actions only, no PII)
-```
+![Evidence](images/Test_1_A6.png)
 
 | Check | Pass? |
 |-------|-------|
-| Rows appear after tests | |
-| No image bytes / base64 columns | |
-| You can tell who did what action at a high level | |
+| Rows appear after tests |Yes |
+| No image bytes / base64 columns |Yes |
+| You can tell who did what action at a high level |Yes |
 
 ### Lab questions
 
 1. What is **non-repudiation** in this context? How does the audit log help?
+> Non-repudiation means a coach (or attacker using their account) cannot later credibly deny that an action happened. It is not the same as authentication — AuthN proves "this request had a valid coach JWT"; non-repudiation is the durable record that "coach X did enroll/check-attendance/authz_deny on student Y in batch Z at time T." The `face_api_audit_log` helps by storing who / action / student_id / batch_id / success / detail so you can investigate disputes ("I didn't enroll that face") and abuse after the fact.
 2. Why must audit logs omit raw photos and embeddings?
+> Audit rows are copied into backups, exports, and later SIEM/SOC tools, and they are kept longer than a single API request. Photos and embeddings are biometric templates — high-value if leaked. Logging only reason codes (e.g. `out_of_scope`, `no_face`) follows data minimization: you keep enough to investigate who did what, without creating a second biometric store inside the audit trail.
 3. If AuthZ denies a request, should you still log it? Why?
+> Yes. An AuthZ deny is often more security-relevant than a success — it means someone tried an out-of-scope `student_id`/`batch_id` (IDOR probe, confused coach, or stolen JWT misuse). Logging `authz_deny` lets you spot repeated failures from one coach or IP pattern later. If you only logged successes, failed attacks would be invisible.
 4. Who should be allowed to **read** `face_api_audit_log` (coach / admin / service_role only)? Justify.
+> Coaches (`authenticated`) must not read it from the mobile client — no product need, and it would expose other coaches' activity and targeted student IDs. In our migration, only `service_role` (Face API) may INSERT/SELECT so the API can write rows and you can verify via the server; `anon`/`authenticated` are denied by RLS. Human review should be admin-only through a privileged path (SQL Editor / future admin API), not every coach JWT. The Face API writes the log; broad client read access would defeat least privilege.
 5. How would a future SOC detection use this table? Give one example rule in plain English.
-
+> Example rule: "Alert if the same `coach_id` produces 20 or more `authz_deny` rows within 10 minutes" — that pattern looks like IDOR probing or a misused token, and should page someone to suspend the coach and inspect recent enroll/attendance rows for that account.
 ---
 
 ## A7 — Cleartext traffic (mobile)
@@ -341,22 +343,25 @@ student_auth_deny_authenticated
 
 | File | Change summary |
 |------|----------------|
-| `client/app.config.js` | |
-| `client/eas.json` | |
+| `client/app.config.js` |Updated code to: usesCleartextTraffic: process.env.APP_VARIANT === 'development', |
+| `client/eas.json` |Added env block to each build profile |
 
 | Profile | `APP_VARIANT` | Cleartext allowed? |
 |---------|---------------|--------------------|
-| development | | |
-| preview | | |
-| production | | |
+| development |development |yes |
+| preview |preview |no |
+| production |production |no |
 
 ### Lab questions
 
 1. What attack does HTTPS protect against on a café Wi‑Fi?
+> HTTPS protects against **eavesdropping and man-in-the-middle (MITM)** on untrusted networks (café Wi‑Fi, hostile hotspots). Without TLS, anyone on the same network can sniff or alter traffic — for this app that means coach JWTs, uploaded face photos, and student/batch IDs in transit.
 2. Why allow cleartext at all in development?
+> Local Face API usually runs as plain HTTP on your LAN (`http://192.168.x.x:8000`) without a real TLS certificate. Dev builds need cleartext so the phone can reach that server during daily development. It is a deliberate tradeoff for local DX — not a reason to leave HTTP on in preview/production.
 3. What bug existed if cleartext stayed on when `APP_VARIANT` was unset? Why is that dangerous for a “production” local mistake?
+> The fail-open bug: if cleartext was allowed whenever `APP_VARIANT` was missing or not exactly `production`, an unset env (common in local/non-EAS builds) left `usesCleartextTraffic` **on**. That is dangerous because a “prod-like” build could still talk HTTP — so a mistaken LAN or staging URL would send JWTs and face photos in cleartext. The fix (`=== 'development'`) fails closed: unset → cleartext **off**.
 4. Does fixing `app.config.js` alone secure a phone that already has an old build installed? What else is required?
-
+> No. `usesCleartextTraffic` is baked into the native build at compile time. Phones already running an old APK/IPA keep the old setting until you **rebuild** (EAS) and **reinstall/update** that build on the device. Changing source alone does nothing for installs already in the field.
 ---
 
 ## A8 — Security Advisor triage
@@ -365,24 +370,32 @@ student_auth_deny_authenticated
 
 | Item | Value |
 |------|-------|
-| Previous export | `supabase-warning-*.csv` |
-| New export filename | |
-| Date run | |
+| Previous export | `supabase-warning.csv` |
+| New export filename | `supabase-warning-phaseA-20260801.csv` |
+| Date run | 8/1/26 |
 
 ### Triage table
 
 | Finding (short) | Severity | New / old / fixed | Decision: fix now / accept | One-line rationale |
 |-----------------|----------|-------------------|----------------------------|--------------------|
-| | | | | |
-| | | | | |
-| | | | | |
+| `extension_in_public` (`vector` in `public`) | WARN | old | accept | Standard pgvector layout; moving schema is high-risk for little gain right now |
+| `authenticated` can execute SECURITY DEFINER coach helpers (`current_coach_id`, `has_coach_access`, etc.) | WARN | old | accept | Intentional app RPCs; they use `auth.uid()` / internal guards (documented in `ENVIRONMENTS.md`) |
+| `authenticated` can execute `list_pending_fees` SECURITY DEFINER | WARN | new | accept | Fees RPC used by signed-in coaches; keep until a later invoker/grant hardening pass |
+| `anon` SECURITY DEFINER on admin/coach RPCs | WARN | fixed | — | Sprint 0 revoke migration removed anon execute |
+| `public_bucket_allows_listing` on `student-auth-photos` | WARN | fixed | — | Broad storage SELECT policy removed in Sprint 0 |
+| `function_search_path_mutable` on `match_face` | WARN | fixed | — | `SET search_path` applied in Sprint 0 migration |
+| `admin_insert_coach` / admin password RPCs executable by `authenticated` | WARN | fixed | — | Revoked from app roles; service_role / Face API only |
 
 ### Lab questions
 
 1. What is the difference between a **linter/advisor finding** and a **proven exploit**?
+> An advisor finding is a static check that a configuration *might* be risky (e.g. SECURITY DEFINER + `authenticated` EXECUTE). It does not prove anyone can abuse it today. A proven exploit is a working attack path you demonstrated — e.g. calling an RPC with anon/JWT and getting unauthorized data or a privileged write. Advisors triage where to look; exploits prove impact.
 2. Pick one finding you **accepted**. Why is accepting sometimes correct?
+> I accepted `extension_in_public` (`vector` in `public`). Moving pgvector mid-project is high risk for little security gain right now, and the embeddings path is already gated by RLS + service_role. Accepting is correct when risk is low/understood, fix cost is high, and you document revisit criteria (e.g. before prod hardening).
 3. Pick one finding that would be **Critical** if true in production. What would an attacker gain?
+> The old `anon` / public EXECUTE on `admin_insert_coach` (now fixed) would be Critical in production: anyone with the anon key could create coaches or flip admin-related flags without signing in — full privilege escalation into the academy admin surface.
 4. How often would you re-run the advisor during a 14-day AppSec push? Why?
+> After every security-relevant migration or grant/RLS change, plus once at the end of the push (roughly every few days if shipping DB fixes). Re-running catches regressions and confirms “fixed” items stay gone; waiting two weeks only is too late to catch something you just broke. 
 
 ---
 
@@ -448,7 +461,7 @@ _What did you send, what came back, what does that prove?_
 
 ---
 
-## Appendix — commands scratchpad (redact before sharing)
+## Appendix A — commands scratchpad (redact before sharing)
 
 ```powershell
 $API = "http://127.0.0.1:8000"
@@ -458,4 +471,428 @@ $TOKEN = "<redacted>"
 
 ```sql
 -- paste verification queries only
+```
+
+---
+
+# Phase B — Edge, transport, and secrets
+
+| Field | Value |
+|-------|-------|
+| Start date | |
+| End date | |
+| Host platform chosen | Fly.io / Railway / other: |
+| Staging API URL (HTTPS) | |
+| Cloudflare / WAF zone (if any) | |
+| Rate-limit thresholds documented in | `ENVIRONMENTS.md` / this file |
+| Secrets checklist location | `ENVIRONMENTS.md` |
+| Prod Supabase cutover runbook location | |
+
+---
+
+## Phase B checklist
+
+- [ ] B0 Design note complete
+- [ ] B1 Face API on HTTPS + `/health`
+- [ ] B2 Cloudflare (or host WAF) in front of API
+- [ ] B3 Host rate limits on `/enroll` + `/check-attendance`
+- [ ] B4 Secrets hygiene checklist written + followed
+- [ ] B5 Prod Supabase project cutover runbook
+- [ ] B6 Branch protection requires CI on PRs
+- [ ] B7 No service-role in client bundle / Expo config
+- [ ] Final teach-backs + residual risks
+
+---
+
+## B0 — Design lab (do this BEFORE deploying)
+
+### What to write
+
+**Assets in scope for Phase B**
+
+1. Face API host (Fly/Railway/etc.): TLS termination, health checks, env secrets on the host
+2. Edge / WAF layer: who can reach the API from the public internet, bot/rate rules
+3. Rate limits on CPU-heavy face routes: per-IP (and optionally per-coach) thresholds
+4. Secret inventory: service-role, anon/publishable keys, EAS secrets per profile, local `.env`
+5. Environment separation plan: shared free-tier Supabase today → dedicated prod project later
+6. GitHub branch protection: CI must pass before merge to protected branches
+7. Client binary hygiene: confirm service-role / secret keys never ship in Expo builds
+
+**Attack you are closing (one paragraph)**  
+_What could go wrong after Phase A if the API stays on LAN HTTP with no edge controls?_
+
+>
+
+**Deployment + secrets contract (your design)**
+
+```text
+Staging Face API:
+  - HTTPS only (preview/production mobile builds never call http://)
+  - GET /health → 200 without auth (for host health checks only)
+  - DEBUG_ENROLL_IMAGES=0 on the host
+  - SUPABASE_KEY = service_role/secret — host env only, never in git or Expo
+
+Rate limits (starting point — adjust after you measure):
+  - /enroll:            ___ / min / IP
+  - /check-attendance:  ___ / min / IP
+  - Expected reject code: 429
+  - Where enforced: app (slowapi/middleware) and/or edge (Cloudflare)
+
+Secrets rules:
+  - Publishable/anon → client + EAS OK
+  - Service-role / SUPABASE_KEY → server host only
+  - If a secret was pasted in chat/logs → rotate before marking B4 done
+
+Prod Supabase cutover (even if later):
+  - New project → run all migrations → bootstrap admin → point production EAS + prod API host
+  - Do NOT wipe the shared project while it is still staging+dev
+```
+
+### Lab questions — answer thoroughly
+
+1. Why is deploying the Face API on **HTTPS** a different control from Phase A’s cleartext toggle (`usesCleartextTraffic`)?
+>
+2. What does a **WAF / edge proxy** give you that app-layer AuthZ (Phase A) does not?
+>
+3. Why rate-limit `/enroll` and `/check-attendance` specifically, not only `/health`?
+>
+4. If the service-role key leaks into an Expo build or a chat log, what is the blast radius? Name at least two tables/actions an attacker could hit.
+>
+
+**Gate:** Do not start hosting/WAF work until questions 1–4 are answered above.
+
+---
+
+## B1 — Face API on HTTPS + health check
+
+### What you implemented / deployed
+
+| Item | Your notes |
+|------|------------|
+| Host platform | Fly.io / Railway / other: |
+| App / service name | |
+| Public HTTPS base URL | `https://…` |
+| How TLS is provided | platform cert / Cloudflare / other |
+| `GET /health` exists? | file + function: |
+| Host health-check config | path `/health`, interval: |
+| Env vars set on host | `SUPABASE_URL`, `SUPABASE_KEY`, `DEBUG_ENROLL_IMAGES=0`, others: |
+| Preview EAS `EXPO_PUBLIC_API_BASE_URL` | points at HTTPS URL? Y/N |
+
+### Evidence
+
+| # | Test case | Command or steps (redacted) | Expected | Actual | Pass? | Proof |
+|---|-----------|-----------------------------|----------|--------|-------|-------|
+| 1 | `GET /health` over HTTPS | | 200 | | | |
+| 2 | `POST /enroll` no token over HTTPS | | 401 or 422 | | | |
+| 3 | Preview/prod config has no `http://` API URL | | HTTPS only | | | |
+| 4 | Host restarts / health check recovers after kill | | healthy again | | | |
+
+### Lab questions
+
+1. Why should `/health` stay **unauthenticated** while `/enroll` requires a coach JWT?
+>
+2. What would break if you pointed a **preview** EAS build at your LAN `http://192.168.x.x:8000` after Phase A cleartext is off?
+>
+3. Where do host secrets live (Fly secrets / Railway variables / etc.), and why must they **not** be committed to git?
+>
+4. After deploy, how do you confirm `DEBUG_ENROLL_IMAGES` is actually `0` on the host (not just in local `.env`)?
+>
+
+---
+
+## B2 — Cloudflare (or host WAF) in front of API
+
+### What you configured
+
+| Item | Notes |
+|------|-------|
+| Edge product chosen | Cloudflare / Fly WAF / Railway / none yet |
+| DNS / proxy mode | orange-cloud / DNS-only / platform-native |
+| TLS mode (if Cloudflare) | Full / Full (strict) / Flexible — pick and justify |
+| Bot / rate / WAF rules enabled | list rule names briefly |
+| Origin still reachable by raw IP/host? | Y/N — if Y, what residual risk? |
+
+### Evidence
+
+| # | Test | Expected | Actual | Pass? | Proof |
+|---|------|----------|--------|-------|-------|
+| 1 | Browser or curl hits public HTTPS hostname | TLS OK, API responds | | | |
+| 2 | At least one edge rule documented (rate, bot, geo, or WAF managed) | rule exists | | | |
+| 3 | Screenshot or export of rule list (no account secrets) | saved under `images/` or notes | | | |
+
+### Design teach-back (2–3 sentences)
+
+_Explain to an interviewer why the Face API should not be a naked origin on the open internet:_
+
+>
+
+### Lab questions
+
+1. What is the difference between **TLS to the edge** and **TLS to the origin**? Why is “Flexible” TLS dangerous?
+>
+2. Name one attack AuthZ will not stop that a WAF/rate rule might blunt (e.g. volumetric abuse).
+>
+3. If Cloudflare is DNS-only (grey cloud), what protection are you *not* getting?
+>
+4. Should `/docs` or OpenAPI stay publicly browsable on staging/prod? Why or why not?
+>
+
+---
+
+## B3 — Host rate limits
+
+### What you implemented
+
+| Control | Value you chose | Where enforced |
+|---------|-----------------|----------------|
+| `/enroll` limit | ___ / min / IP | app middleware / edge / both |
+| `/check-attendance` limit | ___ / min / IP | app middleware / edge / both |
+| Reject status | 429 | |
+| Documented in | `ENVIRONMENTS.md` § / this file | |
+
+### Evidence
+
+| # | Test case | Expected | Actual | Pass? | Proof |
+|---|-----------|----------|--------|-------|-------|
+| 1 | Burst > limit on `/enroll` (synthetic; short) | **429** after threshold | | | |
+| 2 | Normal single enroll under limit | not 429 from rate limiter | | | |
+| 3 | `/health` still reachable under mild load | 200 | | | |
+
+### Lab questions
+
+1. What abuse are face-route rate limits meant to stop? Be specific (CPU, cost, biometric spam).
+>
+2. Why is **per-IP** alone incomplete (NAT, shared Wi‑Fi, rotating proxies)? What else could you key on later?
+>
+3. Why return **429** instead of silently dropping or returning 403?
+>
+4. How do rate limits relate to Phase A upload size limits — complementary or redundant?
+>
+
+---
+
+## B4 — Secrets hygiene checklist
+
+### Checklist you wrote / followed
+
+Copy the living checklist into `ENVIRONMENTS.md` (or paste the final version below). Mark each item when done.
+
+| # | Check | Done? | Date / notes |
+|---|-------|-------|--------------|
+| 1 | Inventory: list every secret (service-role, anon, EAS, host env, any third-party) | | |
+| 2 | Confirm service-role never in `client/`, `app.config.js`, or EAS **public** env | | |
+| 3 | EAS secrets set **per profile** (`development` / `preview` / `production`) for `EXPO_PUBLIC_*` | | |
+| 4 | Host env has `SUPABASE_KEY` + `DEBUG_ENROLL_IMAGES=0` | | |
+| 5 | `.env` / `.env.*` gitignored; no keys in git history for this phase | | |
+| 6 | Rotate any secret that was pasted in chat, screenshots, or CI logs | | |
+| 7 | Document who can rotate secrets (you / co-owner) in `ENVIRONMENTS.md` | | |
+
+### Evidence
+
+- [ ] Secrets matrix filled (roles × where stored) — no raw secret values
+- [ ] Grep/search notes for `service_role` / `sb_secret` / `SUPABASE_KEY` in client tree (results summarized, redacted)
+
+**Secrets matrix (names only — never paste values):**
+
+| Secret name | Allowed locations | Forbidden locations |
+|-------------|-------------------|---------------------|
+| `SUPABASE_KEY` / service-role | Face API host env, local `server/.env` | Expo, git, chat, client bundle |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | EAS secrets, `client/.env` | Treat as public; still don’t commit if repo is public + unrestricted |
+| `EXPO_PUBLIC_API_BASE_URL` | EAS per profile | Must be HTTPS for preview/prod |
+
+### Lab questions
+
+1. Why is the **anon/publishable** key allowed on the client but the **service-role** key is not? Tie your answer to RLS.
+>
+2. What does “rotate” mean operationally (generate new → update host/EAS → revoke old → verify)?
+>
+3. If Dependabot or a screenshot leaked a host secret, what is your first hour’s response?
+>
+4. Why keep a written checklist instead of “I’ll remember”?
+>
+
+---
+
+## B5 — Prod Supabase project cutover runbook
+
+### Runbook you wrote
+
+Even if you stay on the shared free-tier project for now, write the cutover steps so launch is not improvised.
+
+| Step | Action | Owner | Done when |
+|------|--------|-------|-----------|
+| 1 | Create new Supabase project (`mccc-prod` or similar) | You | Project URL + ref recorded |
+| 2 | Apply all migrations in order | You | Tables/policies present |
+| 3 | Bootstrap admin coach | You | Admin can sign in |
+| 4 | Set prod Face API host env to **prod** URL + **prod** service key | You | `/health` + auth smoke |
+| 5 | Point **production** EAS secrets at prod Supabase + HTTPS API | You | Prod build talks to prod only |
+| 6 | Enable backups / confirm recovery notes | You | Note in `ENVIRONMENTS.md` |
+| 7 | Freeze or re-purpose shared project as staging-only | You | Documented |
+
+**Where the full runbook lives:** `ENVIRONMENTS.md` § / path:  
+
+**Deferred intentionally until:** paid plan / launch date:  
+
+### Lab questions
+
+1. What risk does a **shared** Supabase project create between “dev experiments” and “real academy data”?
+>
+2. Why migrate with the **migration files** instead of clicking schema together in the Dashboard for prod?
+>
+3. After cutover, which EAS profile must still be allowed to hit the old/shared project (if any)?
+>
+4. What should you **not** do on the shared project once production coaches depend on a new prod project?
+>
+
+---
+
+## B6 — Branch protection
+
+### What you configured
+
+| Item | Notes |
+|------|-------|
+| Protected branch(es) | `main` / `cursor` / other: |
+| Require PR before merge? | Y/N |
+| Require status checks to pass? | which checks: |
+| Include administrators? | Y/N |
+| Date enabled | |
+
+### Evidence
+
+| # | Test | Expected | Actual | Pass? |
+|---|------|----------|--------|-------|
+| 1 | Open a test PR that fails CI (or view required checks list) | merge blocked while red | | |
+| 2 | Screenshot or settings note (no tokens) | saved | | |
+
+### Lab questions
+
+1. What class of mistakes does “require CI on PR” catch that local-only testing misses?
+>
+2. Why protect `main` even on a solo project?
+>
+3. Branch protection is not a substitute for which Phase A control?
+>
+
+---
+
+## B7 — No service-role in client bundle
+
+### What you verified
+
+| Check | How you verified | Result |
+|-------|------------------|--------|
+| No `SUPABASE_KEY` / service-role in `client/` source | grep / search | |
+| `app.config.js` / `extra` only has publishable config | read file | |
+| EAS secrets for mobile profiles are `EXPO_PUBLIC_*` only | EAS dashboard / CLI list names | |
+| Built artifact spot-check (optional) | search preview build env / bundle | |
+
+### Evidence
+
+```text
+# Paste redacted grep commands + match summary (paths only, no key material)
+```
+
+### Lab questions
+
+1. Why is “the UI never uses the service key” insufficient proof?
+>
+2. What is the difference between an **EAS secret** and a value baked into `app.config.js` at build time?
+>
+3. If you find a service-role string in the client tree, what is the remediation order (remove → rotate → rebuild)?
+>
+
+---
+
+## Cross-cutting evidence — Phase B architecture
+
+Fill after B1–B3. Draw or describe the path a preview-build enroll request takes.
+
+```text
+[Coach device / preview build]
+       | HTTPS
+       v
+[Edge / WAF (optional but preferred)]
+       | TLS to origin
+       v
+[Face API host]
+       | service_role (server only)
+       v
+[Supabase Auth + Postgres]
+```
+
+| Checkpoint | URL or setting (redacted) | Pass? |
+|------------|---------------------------|-------|
+| Mobile `EXPO_PUBLIC_API_BASE_URL` is `https://…` for preview | | |
+| `GET https://…/health` → 200 | | |
+| Rate limit documented | | |
+| Service-role only on host | | |
+
+### Lab questions
+
+1. A teammate wants to “just open port 8000 on the home router” for coaches. Why is that worse than Fly/Railway + HTTPS?
+>
+2. How do Phase A AuthZ and Phase B rate limits work together on a stolen coach JWT?
+>
+
+---
+
+## Final teach-backs (interview gate) — Phase B
+
+Answer in **your own words**. Aim for 3–5 sentences each.
+
+### T1 — Why HTTPS at the API host matters even if Supabase is already HTTPS
+
+>
+
+### T2 — WAF / edge vs application AuthZ
+
+>
+
+### T3 — Secrets matrix: anon vs service-role
+
+>
+
+### T4 — Walk me through your HTTPS deploy smoke test
+
+_What did you curl, what came back, what does that prove?_
+
+>
+
+### T5 — One residual risk you still accept after Phase B
+
+>
+
+---
+
+## Phase B sign-off
+
+| Statement | Initials / date |
+|-----------|-----------------|
+| I deployed or verified HTTPS myself (AI did not “verify” for me) | |
+| I can explain every checkbox without reading the host dashboard first | |
+| `SECURITY_AUDIT.md` / `ENVIRONMENTS.md` have no secrets or real PII | |
+| Phase B checklist at top is complete | |
+
+**Phase B result:** PASS / PARTIAL (list gaps):
+
+>
+
+---
+
+## Appendix B — commands scratchpad (redact before sharing)
+
+```powershell
+$API = "https://<staging-api-host>"
+# health
+curl -s -o /dev/null -w "%{http_code}\n" "$API/health"
+# unauthenticated enroll
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$API/enroll"
+# rate-limit burst (keep short; do not DoS shared free tiers)
+# for ($i=1; $i -le 40; $i++) { curl -s -o /dev/null -w "%{http_code}\n" -X POST "$API/enroll" -H "Authorization: Bearer $TOKEN" -F "student_id=..." -F "batch_id=..." -F "file=@photo.jpg" }
+```
+
+```text
+# secrets grep (names/paths only)
+rg -n "service_role|SUPABASE_KEY|sb_secret" client/ --glob '!**/node_modules/**'
 ```

@@ -27,10 +27,7 @@ export default ({ config }) => {
       edgeToEdgeEnabled: true,
       // Cleartext HTTP only for local/dev clients. preview/production EAS builds
       // must set APP_VARIANT=preview|production so HTTPS-only Face API is enforced.
-      usesCleartextTraffic:
-        process.env.APP_VARIANT === 'development' ||
-        process.env.APP_VARIANT === undefined && process.env.EAS_BUILD_PROFILE === 'development' ||
-        (!process.env.EAS_BUILD_PROFILE && process.env.NODE_ENV !== 'production'),
+      usesCleartextTraffic: process.env.APP_VARIANT === 'development',
     },
     plugins: [
       'expo-router',

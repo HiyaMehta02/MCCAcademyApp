@@ -85,8 +85,85 @@ CREATE POLICY student_auth_deny_authenticated
 
 
 -- =============================================================================
--- Phase A — A6: face_api_audit_log  (add DDL + RLS here when you do A6)
+-- Phase A — A6: face_api_audit_log
 -- =============================================================================
--- CREATE TABLE … columns only for who/action/student/batch/success/timestamp
--- ENABLE RLS; REVOKE from anon/authenticated; GRANT to service_role; deny policies
--- Do NOT store image bytes, base64, or embeddings in the audit table.
+-- Goal: append-only trail of Face API actions for non-repudiation / SOC-lite.
+-- Store WHO / WHAT / WHICH student+batch / success / when — NEVER photos,
+-- base64, or face embeddings.
+--
+-- Same privilege model as A5: only service_role (Face API) may write/read.
+-- Mobile clients (anon / authenticated) get nothing.
+-- =============================================================================
+
+
+-- ---------------------------------------------------------------------------
+-- 1) Table
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.face_api_audit_log (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  -- Who called the API (nullable if AuthN failed before coach id was resolved)
+  coach_id      uuid NULL,
+  -- High-level action: enroll | check_attendance | authz_deny
+  action        text NOT NULL,
+  student_id    uuid NULL,
+  batch_id      uuid NULL,
+  success       boolean NOT NULL,
+  -- Short machine-readable reason only (e.g. not_in_batch, no_face) — never bytes
+  detail        text NULL,
+
+  CONSTRAINT face_api_audit_log_action_nonempty
+    CHECK (char_length(trim(action)) > 0)
+);
+
+COMMENT ON TABLE public.face_api_audit_log IS
+  'Face API audit trail (who/action/student/batch/success). No image bytes or embeddings.';
+
+CREATE INDEX IF NOT EXISTS face_api_audit_log_created_at_idx
+  ON public.face_api_audit_log (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS face_api_audit_log_action_idx
+  ON public.face_api_audit_log (action, created_at DESC);
+
+
+-- ---------------------------------------------------------------------------
+-- 2) Row Level Security
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.face_api_audit_log ENABLE ROW LEVEL SECURITY;
+
+
+-- ---------------------------------------------------------------------------
+-- 3) Revoke client privileges
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON TABLE public.face_api_audit_log FROM PUBLIC;
+REVOKE ALL ON TABLE public.face_api_audit_log FROM anon;
+REVOKE ALL ON TABLE public.face_api_audit_log FROM authenticated;
+
+
+-- ---------------------------------------------------------------------------
+-- 4) Grant only the Face API role
+-- ---------------------------------------------------------------------------
+-- INSERT: write audit rows from /enroll, /check-attendance, AuthZ deny paths
+-- SELECT: optional server-side reads / verification queries
+-- No UPDATE/DELETE: audit rows should be append-only from the app's POV
+GRANT SELECT, INSERT ON TABLE public.face_api_audit_log TO service_role;
+
+
+-- ---------------------------------------------------------------------------
+-- 5) Explicit deny policies (intent visible in pg_policy)
+-- ---------------------------------------------------------------------------
+DROP POLICY IF EXISTS face_api_audit_log_deny_anon ON public.face_api_audit_log;
+CREATE POLICY face_api_audit_log_deny_anon
+  ON public.face_api_audit_log
+  FOR ALL
+  TO anon
+  USING (false)
+  WITH CHECK (false);
+
+DROP POLICY IF EXISTS face_api_audit_log_deny_authenticated ON public.face_api_audit_log;
+CREATE POLICY face_api_audit_log_deny_authenticated
+  ON public.face_api_audit_log
+  FOR ALL
+  TO authenticated
+  USING (false)
+  WITH CHECK (false);

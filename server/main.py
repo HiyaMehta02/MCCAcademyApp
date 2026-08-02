@@ -87,12 +87,12 @@ async def _rpc_returns_true(token: str, rpc_name: str) -> bool:
     return bool(response.json())
 
 
-async def _require_coach(authorization: str | None) -> None:
+async def _require_coach(authorization: str | None) -> str:
     token = _bearer_token(authorization)
     if await _rpc_returns_true(token, "has_coach_access"):
-        return
+        return token
     if await _rpc_returns_true(token, "is_current_user_admin"):
-        return
+        return token
     raise HTTPException(status_code=403, detail="Coach access required.")
 
 
@@ -142,6 +142,92 @@ async def _current_coach_id(token: str) -> str | None:
         return None
     value = response.json()
     return str(value) if value else None
+
+
+def _write_face_api_audit(
+    *,
+    action: str,
+    success: bool,
+    coach_id: str | None = None,
+    student_id: str | None = None,
+    batch_id: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Append one Face API audit row. Never stores image bytes or embeddings."""
+    row: dict[str, Any] = {"action": action, "success": success}
+    if coach_id:
+        row["coach_id"] = coach_id
+    sid = (student_id or "").strip()
+    bid = (batch_id or "").strip()
+    if sid:
+        row["student_id"] = sid
+    if bid:
+        row["batch_id"] = bid
+    if detail:
+        row["detail"] = detail[:200]
+    try:
+        supabase.table("face_api_audit_log").insert(row).execute()
+    except Exception as exc:
+        # Audit must not break enroll/attendance.
+        print(f"[face audit warning] {exc}")
+
+
+def _authz_deny_detail(exc: HTTPException) -> str:
+    msg = str(exc.detail or "").lower()
+    if "not active" in msg:
+        return "student_not_active"
+    if "out of scope" in msg:
+        return "out_of_scope"
+    return "authz_denied"
+
+
+async def _coach_after_authz(
+    authorization: str,
+    student_id: str,
+    batch_id: str,
+) -> str | None:
+    """AuthN + AuthZ; on AuthZ deny, write audit row then re-raise."""
+    token = await _require_coach(authorization)
+    coach_id = await _current_coach_id(token)
+    try:
+        await _require_coach_can_act_on_student(student_id, batch_id)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            _write_face_api_audit(
+                action="authz_deny",
+                success=False,
+                coach_id=coach_id,
+                student_id=student_id,
+                batch_id=batch_id,
+                detail=_authz_deny_detail(exc),
+            )
+        raise
+    return coach_id
+
+
+def _upload_fail_detail(exc: HTTPException) -> str:
+    if exc.status_code == 413:
+        return "upload_too_large"
+    msg = str(exc.detail or "").lower()
+    if "empty" in msg:
+        return "empty_upload"
+    if "unsupported" in msg or "type" in msg:
+        return "unsupported_type"
+    return "upload_rejected"
+
+
+def _face_extract_fail_detail(response: JSONResponse) -> str:
+    try:
+        body = response.body
+        text = body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else str(body)
+        low = text.lower()
+    except Exception:
+        return "face_extract_failed"
+    if "no face" in low:
+        return "no_face"
+    if "decode" in low:
+        return "bad_image"
+    return "face_extract_failed"
 
 
 class ImportCsvRequest(BaseModel):
@@ -332,9 +418,21 @@ async def enroll_player(
     batch_id: str = Form(...),
     file: UploadFile = File(...),
 ):
-    await _require_coach(authorization)
-    await _require_coach_can_act_on_student(student_id, batch_id)
-    raw_bytes = await _validate_image_upload(file)
+    coach_id = await _coach_after_authz(authorization, student_id, batch_id)
+
+    try:
+        raw_bytes = await _validate_image_upload(file)
+    except HTTPException as exc:
+        _write_face_api_audit(
+            action="enroll",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail=_upload_fail_detail(exc),
+        )
+        raise
+
     saved = _save_debug_enroll_image(student_id, raw_bytes, file.filename)
     if saved is not None:
         print(f"[debug enroll] saved: {saved}")
@@ -342,6 +440,14 @@ async def enroll_player(
 
     embedding = await _extract_face_embedding(file)
     if isinstance(embedding, JSONResponse):
+        _write_face_api_audit(
+            action="enroll",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail=_face_extract_fail_detail(embedding),
+        )
         return embedding
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -358,8 +464,23 @@ async def enroll_player(
             on_conflict="student_id",
         ).execute()
     except APIError as exc:
+        _write_face_api_audit(
+            action="enroll",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail="db_error",
+        )
         return _handle_api_error(exc, "Saving face enrollment")
 
+    _write_face_api_audit(
+        action="enroll",
+        success=True,
+        coach_id=coach_id,
+        student_id=student_id,
+        batch_id=batch_id,
+    )
     return {"message": "Face initialized successfully"}
 
 
@@ -370,11 +491,31 @@ async def check_attendance(
     batch_id: str = Form(...),
     file: UploadFile = File(...),
 ):
-    await _require_coach(authorization)
-    await _require_coach_can_act_on_student(student_id, batch_id)
-    await _validate_image_upload(file)
+    coach_id = await _coach_after_authz(authorization, student_id, batch_id)
+
+    try:
+        await _validate_image_upload(file)
+    except HTTPException as exc:
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail=_upload_fail_detail(exc),
+        )
+        raise
+
     embedding = await _extract_face_embedding(file)
     if isinstance(embedding, JSONResponse):
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail=_face_extract_fail_detail(embedding),
+        )
         return embedding
 
     try:
@@ -386,14 +527,38 @@ async def check_attendance(
             },
         ).execute()
     except APIError as exc:
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail="db_error",
+        )
         return _handle_api_error(exc, "Face matching")
 
     if not response.data or len(response.data) == 0:
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail="face_not_recognized",
+        )
         return _json_error(404, "Face not recognized.")
 
     match = response.data[0]
     matched_id = str(match["student_id"]).lower()
     if matched_id != str(student_id).lower():
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail="face_mismatch",
+        )
         return _json_error(
             403,
             "Face does not match the selected student.",
@@ -411,9 +576,32 @@ async def check_attendance(
         ).execute()
     except APIError as exc:
         if getattr(exc, "code", None) == "23505":
+            _write_face_api_audit(
+                action="check_attendance",
+                success=True,
+                coach_id=coach_id,
+                student_id=student_id,
+                batch_id=batch_id,
+                detail="already_recorded",
+            )
             return {"message": "Attendance already recorded for today."}
+        _write_face_api_audit(
+            action="check_attendance",
+            success=False,
+            coach_id=coach_id,
+            student_id=student_id,
+            batch_id=batch_id,
+            detail="db_error",
+        )
         return _handle_api_error(exc, "Recording attendance")
 
+    _write_face_api_audit(
+        action="check_attendance",
+        success=True,
+        coach_id=coach_id,
+        student_id=student_id,
+        batch_id=batch_id,
+    )
     return {"message": "Attendance logged successfully."}
 
 

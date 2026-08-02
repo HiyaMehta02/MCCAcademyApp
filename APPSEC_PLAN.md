@@ -2,7 +2,7 @@
 
 **Purpose:** Make this app as secure as a small production academy system can reasonably be, and give you **hands-on experience across cybersecurity domains** (AppSec, SAST/DAST, pen testing, vuln management, cloud, IAM, SOC/logging, IR, GRC) grounded in *real work you own and can demonstrate*.
 
-**Last updated:** 2026-07-28  
+**Last updated:** 2026-08-01  
 **Stack in scope:** Expo/React Native client · FastAPI Face API · Supabase (Auth, Postgres + RLS, Storage) · GitHub Actions · EAS · Docker host (Fly/Railway)
 
 **How this relates to other docs**
@@ -351,19 +351,201 @@ Avoid: “Implement Phase A for me end-to-end” — that burns the learning.
 
 ### Phase B — Edge, transport, and secrets (3–5 days)
 
-**Goal:** Production-shaped deployment posture.
+**Goal:** Production-shaped deployment posture — HTTPS API, edge abuse controls, secrets hygiene, and a written prod-DB cutover plan.
 
 | # | Work item | Done when |
 |---|-----------|-----------|
 | B1 | Face API on HTTPS (Fly/Railway) with health check | `GET /health` 200; no HTTP in preview/prod |
 | B2 | Cloudflare (or host WAF) in front of API | TLS + basic bot/rate rules |
-| B3 | Host rate limits on `/enroll` and `/check-attendance` (start 20–30/min/IP) | Documented thresholds |
+| B3 | Host rate limits on `/enroll` and `/check-attendance` (start 20–30/min/IP) | Documented thresholds + 429 evidence |
 | B4 | Secrets hygiene checklist: rotate if ever pasted in chat; EAS secrets per profile; server env only | Written checklist in `ENVIRONMENTS.md` |
 | B5 | Plan **prod Supabase project** cutover (even if later) | Runbook exists |
 | B6 | Branch protection: require CI on PRs to `main`/`cursor` | GitHub setting on |
 | B7 | Confirm no service-role in client bundle / Expo config | Grep + EAS secret audit |
 
-**Resume artifact:** Architecture diagram (client → WAF → API → Supabase) + secrets matrix.
+**Maps to:** Sprint 8 deploy slice + `ENVIRONMENTS.md` staging/prod rows.  
+**Resume artifact:** Architecture diagram (client → WAF → API → Supabase) + secrets matrix.  
+**Evidence file:** Continue in `SECURITY_AUDIT.md` under **Phase B**.
+
+---
+
+### Phase B — Learning-optimized runbook (do this version)
+
+**Principle:** You do work that teaches cloud / transport / secrets judgment. AI may scaffold Dockerfiles, health endpoints, or rate-limit middleware after **you** write the design note. After every AI assist, you must be able to **teach back** the security idea in one sentence.
+
+#### What YOU do (high learning — do not outsource)
+
+| Skill you practice | Phase B task |
+|--------------------|--------------|
+| **Threat → deploy control** | B0 design: HTTPS, edge, rate limits, secrets rules |
+| Cloud / platform ops | B1 create host, set secrets, deploy, verify TLS |
+| Edge / network security | B2 put WAF or platform edge rules in front of origin |
+| Abuse / DoS thinking | B3 choose thresholds; prove 429; document in `ENVIRONMENTS.md` |
+| **Secret management** | B4 inventory + matrix; rotate anything leaked |
+| Env separation / GRC-lite | B5 write prod Supabase cutover runbook (even if deferred) |
+| Secure SDLC hygiene | B6 turn on branch protection + required CI |
+| Mobile binary hygiene | B7 grep client + audit EAS secret *names* |
+| Evidence / storytelling | Fill Phase B sections in `SECURITY_AUDIT.md` |
+
+#### What AI may do (low learning — save time)
+
+| Task | Why AI is fine |
+|------|----------------|
+| Stub `GET /health` once you specify “200 JSON, no auth, no secrets” | Mechanical; you verify deploy health checks |
+| First draft Dockerfile / Procfile from your chosen host docs | You still run build + set secrets |
+| Scaffold `slowapi` / middleware boilerplate after you pick limits | You own the numbers and where enforced |
+| Formatting help for secrets checklist tables | You fill every row |
+| Draw mermaid architecture from your notes | You explain the trust boundaries |
+
+#### What to do as a pair (best learning mode)
+
+1. **You** write the B0 design note (HTTPS URL plan, rate numbers, secrets rules).
+2. **AI** implements scaffolding from your note (health, rate limit wiring, Dockerfile).
+3. **You** deploy, set host secrets, and run smoke tests — AI does not “verify” for you.
+4. **You** explain the architecture out loud / in `SECURITY_AUDIT.md`.
+
+---
+
+### Phase B — Exact steps (learning split)
+
+Work top to bottom. Time box: **3–5 days** part-time (or one focused weekend + follow-ups).
+
+#### Step 0 — Open Phase B evidence (YOU · 5 min)
+
+In `SECURITY_AUDIT.md`, start the **Phase B** header table and checklist (B0–B7). Fill teach-back blanks only after you finish.
+
+#### Step 1 — B0 Design before deploy (YOU · 20–30 min) ★ learn: threat → control
+
+Write **your** contract in `SECURITY_AUDIT.md` B0 (edit until true for this app):
+
+```text
+Staging Face API:
+  - HTTPS only for preview/production mobile builds
+  - GET /health → 200, unauthenticated
+  - DEBUG_ENROLL_IMAGES=0 on host
+  - SUPABASE_KEY only on host env (never Expo / git)
+
+Rate limits (starting point):
+  - /enroll: 20–30 / min / IP
+  - /check-attendance: 20–30 / min / IP
+  - reject with 429
+  - enforce in app and/or edge
+
+Secrets:
+  - anon/publishable → client + EAS OK
+  - service-role → server only
+  - rotate anything pasted in chat
+
+Prod Supabase cutover: new project → migrations → bootstrap → point production EAS + prod API
+```
+
+Do **not** skip this. This is the interview story for “how I hardened transport and secrets.”
+
+#### Step 2 — B1 HTTPS Face API + `/health` (YOU primary · 2–4 hr) ★ learn: cloud deploy
+
+**You decide / do:**
+
+1. Pick host: **Fly.io** or **Railway** (or Render/VPS — record why).
+2. Ensure `GET /health` exists in `server/main.py` (200, no auth, no key material in body).
+3. Build/run container or platform build from `server/`.
+4. Set host secrets: `SUPABASE_URL`, `SUPABASE_KEY` (service-role/secret), `DEBUG_ENROLL_IMAGES=0`.
+5. Confirm public URL is `https://…`.
+6. Point **preview** EAS `EXPO_PUBLIC_API_BASE_URL` at that HTTPS URL (not LAN HTTP).
+7. Smoke: `curl https://…/health` → 200; `POST /enroll` without token → 401/422.
+
+**Ask AI only if stuck**, narrow prompts:  
+“Review my `/health` handler — must not leak env or stack traces.”  
+“Here’s my Dockerfile draft for FastAPI + face_recognition — what will break on Fly?”
+
+**AI must NOT:** create your cloud account, paste your real `SUPABASE_KEY` into chat, or mark B1 done without your curl evidence.
+
+Record URL (hostname only is fine) + proof in `SECURITY_AUDIT.md` B1.
+
+#### Step 3 — B2 Edge / WAF (YOU · 45–90 min) ★ learn: network edge
+
+1. Prefer **Cloudflare** in front of the API hostname, **or** enable the host’s built-in WAF/rate features if Cloudflare is overkill for now.
+2. Use **Full (strict)** TLS to origin when certificates allow — never leave “Flexible” on a real API.
+3. Enable at least one concrete rule: bot fight / rate limiting / managed WAF — write the rule name in the audit.
+4. Teach-back: “Why shouldn’t the Face API be a naked origin?”
+
+If you defer Cloudflare, document **why** and which **host-native** control substitutes — do not silently skip.
+
+#### Step 4 — B3 Rate limits (YOU design numbers · 45–75 min) ★ learn: DoS control
+
+**You choose** the thresholds (start **20–30/min/IP** on `/enroll` and `/check-attendance`).
+
+**You implement or co-write:**
+
+1. App-layer limiter (e.g. SlowAPI / custom middleware) **and/or** edge rate rule.
+2. Return **429** when exceeded.
+3. Document final numbers in `ENVIRONMENTS.md` + `SECURITY_AUDIT.md` B3.
+
+**AI may** paste one middleware example after you specify routes + limits — you wire both face routes and retest.
+
+**YOU only** run a short burst test (do not hammer free-tier shared infra). Paste status codes into the audit.
+
+Teach-back: “How do upload size limits (A3) and rate limits (B3) complement each other?”
+
+#### Step 5 — B4 Secrets hygiene (YOU · 30–45 min) ★ learn: IAM / secret mgmt
+
+1. Write a checklist in `ENVIRONMENTS.md` (inventory → locations → rotate-if-leaked → owners).
+2. Fill the **secrets matrix** in `SECURITY_AUDIT.md` B4 (**names only**, never values).
+3. Confirm EAS secrets per profile for `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_BASE_URL`.
+4. Rotate any secret that ever appeared in chat, screenshots, or CI logs **before** checking B4 done.
+
+No AI “rotation” — you click Dashboard / host UI yourself.
+
+#### Step 6 — B5 Prod Supabase cutover runbook (YOU · 30–45 min) ★ learn: env separation
+
+Even on free tier (one project today), write the launch runbook:
+
+1. Create `mccc-prod` (later) → apply all `supabase/migrations/` → bootstrap admin.
+2. Point **prod** Face API host + **production** EAS profile at prod only.
+3. Re-purpose shared project as staging/dev — document “do not wipe prod.”
+
+Paste the step table into `SECURITY_AUDIT.md` B5 and a short section in `ENVIRONMENTS.md`.
+
+**Gate:** Runbook exists. Creating the second project can wait until paid plan / launch.
+
+#### Step 7 — B6 Branch protection (YOU · 10–15 min) ★ learn: secure SDLC
+
+GitHub → Settings → Branches → protect `main` (and `cursor` if you merge there):
+
+- Require a pull request before merging (recommended).
+- Require status checks to pass (your existing `ci.yml` job names).
+- Optionally: do not allow bypass for admins (stricter).
+
+Evidence: settings note or screenshot (no tokens) in audit B6.
+
+#### Step 8 — B7 No service-role in client (YOU · 20–30 min) ★ learn: mobile secret hygiene
+
+```powershell
+# from repo root — summarize paths only; never paste key material into the audit
+rg -n "service_role|SUPABASE_KEY|sb_secret" client/ --glob "!**/node_modules/**"
+```
+
+Also read `client/app.config.js` `extra` and list EAS secret **names** for mobile profiles.  
+If anything secret-shaped appears in the client tree: **remove → rotate → rebuild** before sign-off.
+
+#### Step 9 — Architecture + teach-back gate (YOU · 15–20 min)
+
+1. Fill the Phase B trust-path diagram / checkpoint table in `SECURITY_AUDIT.md`.
+2. Answer T1–T5 teach-backs in your own words.
+3. Mark Phase B checklist + sign-off.
+
+---
+
+### Phase B — “Stuck” prompts (narrow — preserves learning)
+
+Use these instead of “do all of Phase B for me”:
+
+1. “I designed this deploy contract: \[paste B0\]. Point out gaps only (HTTPS, secrets, health).”
+2. “Here’s my `/health` handler: \[paste\]. Any info leak?”
+3. “Show one SlowAPI (or middleware) example for 30/min on `/enroll`; I’ll copy to `/check-attendance`.”
+4. “Review my secrets matrix table for wrong placements (anon vs service-role).”
+5. “Draft Dockerfile comments for Fly/Railway from this host choice: \[Fly|Railway\] — I will run deploy.”
+
+Avoid: “Deploy Phase B end-to-end and set my secrets” — that burns the learning and risks leaking keys into chat.
 
 ---
 
@@ -720,9 +902,15 @@ Do **not** publish real JWTs, service-role keys, student PII, or production URLs
 | Apply migrations + advisor export | ✓ | — |
 | Curl IDOR / negative tests + audit notes | ✓ | — |
 | Dashboard toggles, EAS `APP_VARIANT`, secrets | ✓ | — |
-| CI YAML scaffold (later Phase C) | Enable + triage findings | ✓ first draft |
+| Phase B deploy design (B0) + rate numbers | ✓ write first | Review gaps only |
+| HTTPS host secrets + smoke curls | ✓ deploy / verify | Dockerfile / `/health` stub |
+| WAF / Cloudflare rules | ✓ enable + document | Explain TLS modes if stuck |
+| Secrets matrix + rotation | ✓ | Table formatting only |
+| Prod Supabase cutover runbook | ✓ write | — |
+| Branch protection settings | ✓ | — |
+| CI YAML scaffold (Phase C) | Enable + triage findings | ✓ first draft |
 | Pen-test exec + SOC drills (later) | ✓ | Checklists only |
-| Typos, `/health`, doc formatting | Optional | ✓ |
+| Typos, doc formatting | Optional | ✓ |
 
 ---
 
@@ -742,10 +930,10 @@ Residual risk will always exist (shared free-tier DB until cutover, service-role
 
 ## 13. Immediate next actions (this week)
 
-1. Toggle **leaked password protection** (5 minutes).
-2. Ask AI to implement **Phase A code + migrations** (Sprint 0.5).
-3. Create `SECURITY_AUDIT.md` and paste first AuthZ test results.
-4. Deploy Face API to HTTPS staging and set `DEBUG_ENROLL_IMAGES=0`.
-5. Turn on **branch protection** requiring CI.
+1. Finish any open Phase A boxes in `SECURITY_AUDIT.md` (A6–A8 teach-backs / sign-off if still blank).
+2. Start **Phase B0** design note in `SECURITY_AUDIT.md` (HTTPS, rate limits, secrets rules).
+3. Deploy Face API to HTTPS staging (`/health` + `DEBUG_ENROLL_IMAGES=0` on host).
+4. Turn on **branch protection** requiring CI; write secrets checklist into `ENVIRONMENTS.md`.
+5. When Phase B checklist is green, update this file’s P0/P1 boxes and move to Phase C (SAST/SCA/DAST).
 
-When Phase A is done, update the checkboxes in this file and the Sprint 0.5 section of `SPRINT_PLAN.md`.
+When Phase A is done, keep Sprint 0.5 notes in `SPRINT_PLAN.md` in sync. When Phase B is done, record staging API hostname in `ENVIRONMENTS.md` “Recorded URLs.”
